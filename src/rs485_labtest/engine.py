@@ -5,21 +5,43 @@ from __future__ import annotations
 import random
 import struct
 import time
-from typing import Any
+from typing import Any, Callable
 
 from .patterns import make_payload
 from .protocol import T_ACK, T_CMD_BAUD, T_DATA, FrameReader, build_frame
 from .transport import Transport, WriteTimeout
 
+ProgressCB = Callable[["dict[str, Any]"], None]
+
 
 class TestEngine:
-    """Executa tests contra el slave i acumula resultats."""
+    """Executa tests contra el slave i acumula resultats.
 
-    def __init__(self, ser: Transport, seed: int, quiet: bool = False) -> None:
+    ``on_progress`` es un callback opcional per a feedback en directe: rep el
+    dict de resultats parcial mentre el test corre, escanyat a ``progress_dt``
+    segons. S'invoca sempre *despres* de mesurar cada RTT, mai durant, aixi la
+    latencia reportada no queda contaminada pel temps de pintar la UI.
+    """
+
+    def __init__(self, ser: Transport, seed: int, quiet: bool = False,
+                 on_progress: ProgressCB | None = None,
+                 progress_dt: float = 0.2) -> None:
         self.ser = ser
         self.rng = random.Random(seed)
         self.seq = 0
         self.quiet = quiet
+        self._on_progress = on_progress
+        self._progress_dt = progress_dt
+        self._last_progress = 0.0
+
+    def _emit(self, res: dict[str, Any]) -> None:
+        """Notifica progres al callback, escanyat en el temps (barat si es None)."""
+        if self._on_progress is None:
+            return
+        now = time.monotonic()
+        if now - self._last_progress >= self._progress_dt:
+            self._last_progress = now
+            self._on_progress(res)
 
     # ---- primitives ----
     def _exchange(self, ftype: int, payload: bytes,
@@ -88,6 +110,7 @@ class TestEngine:
                 self.seq += 1
                 res["tx"] += 1
                 self.ser.reset_input_buffer()  # descarta ecos solapats
+                self._emit(res)
                 if gap_ms:
                     time.sleep(gap_ms / 1000.0)
                 continue
@@ -104,6 +127,7 @@ class TestEngine:
                 res["latencies_ms"].append(rtt)
             elif st in ("mismatch", "seq_err", "timeout"):
                 res[st] += 1
+            self._emit(res)
             if gap_ms:
                 time.sleep(gap_ms / 1000.0)
         if collide:
@@ -131,17 +155,20 @@ class TestEngine:
         """Bus en silenci total: qualsevol byte rebut es un fantasma del failsafe."""
         reader = FrameReader()
         self.ser.reset_input_buffer()
+        res: dict[str, Any] = dict(
+            name=name, duration_s=duration_s, baud=self.ser.baudrate,
+            idle_test=True, raw_bytes=0, junk_bytes=0,
+            tx=0, ok=0, crc_err=0, mismatch=0, seq_err=0, timeout=0,
+            latencies_ms=[])
         t_end = time.monotonic() + duration_s
-        raw = 0
         while time.monotonic() < t_end:
             data = self.ser.read(self.ser.in_waiting or 1)
             if data:
-                raw += len(data)
+                res["raw_bytes"] += len(data)
+                res["junk_bytes"] = res["raw_bytes"]
                 reader.feed(data)
-        return dict(name=name, duration_s=duration_s, baud=self.ser.baudrate,
-                    idle_test=True, raw_bytes=raw, junk_bytes=raw,
-                    tx=0, ok=0, crc_err=0, mismatch=0, seq_err=0, timeout=0,
-                    latencies_ms=[])
+            self._emit(res)
+        return res
 
     def sanity_ping(self, tries: int = 5) -> tuple[int, int]:
         """Comprova que el link respon (usat post-colisio)."""

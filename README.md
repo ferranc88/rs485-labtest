@@ -57,6 +57,29 @@ Sortida tipica:
 Codi de sortida: `0` si tot PASS, `1` si hi ha cap FAIL o la corrida
 s'interromp (Ctrl-C genera igualment l'informe parcial).
 
+## Feedback en directe (TUI)
+
+Quan corres en un terminal interactiu, la bateria mostra una vista **en viu**
+que s'actualitza in-place: barra de progrés global amb el recompte
+PASS/FAIL, el **test en curs** amb els seus comptadors, FER, p50/p99 i un
+**sparkline de latències** que batega en temps real, i la taula de tests ja
+completats amb el veredicte de color.
+
+![Vista en directe de la TUI](docs/img/live_tui.svg)
+
+Es controla amb `--live`:
+
+| Valor | Comportament |
+|---|---|
+| `auto` (per defecte) | TUI si hi ha terminal interactiu; si no (pipe, CI, log), sortida línia a línia |
+| `rich` | força la TUI |
+| `plain` | força la sortida línia a línia clàssica (la de sempre) |
+
+El mode `--quiet` no mostra res per consola (només genera els fitxers). El
+mostrar en directe **no afecta les latències mesurades**: el refresc es
+dispara sempre *després* de cronometrar cada RTT, mai durant, i està escanyat
+a ~5 refrescos/s.
+
 ## Modes
 
 | Mode | Funcio |
@@ -78,6 +101,7 @@ s'interromp (Ctrl-C genera igualment l'informe parcial).
 | `--seed` | aleatori | llavor RNG per a corrides reproduibles |
 | `--max-fer` | `0.0` | llindar de Frame Error Rate (0 = cap error tolerat) |
 | `--max-p99` | `0.0` | llindar p99 de latencia en ms (0 = sense llindar) |
+| `--live` | `auto` | feedback en directe: `auto` / `rich` (TUI) / `plain` |
 
 Els criteris per defecte (FER = 0, junk = 0) son intencionals: aixo es una
 eina de **qualificacio**, no de monitoritzacio.

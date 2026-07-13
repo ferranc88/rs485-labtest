@@ -14,6 +14,7 @@ from typing import Any
 
 from . import __version__
 from .engine import TestEngine
+from .monitor import Monitor, make_monitor
 from .protocol import HDR_LEN
 from .report import write_reports
 from .transport import Transport, open_port
@@ -112,17 +113,19 @@ def ber_bound(res: dict[str, Any], size: int) -> tuple[float | None, bool | None
     return errs / bits, False       # cota inferior (>=1 bit dolent per trama)
 
 
-def run_battery(args: argparse.Namespace, transport: Transport | None = None) -> None:
+def run_battery(args: argparse.Namespace, transport: Transport | None = None,
+                monitor: Monitor | None = None) -> None:
     """Orquestra la bateria completa i escriu els informes.
 
     Surt del proces amb codi 1 si hi ha cap FAIL o la corrida s'interromp.
     Un Ctrl-C genera igualment l'informe parcial marcat com a interromput.
-    """
-    quiet = bool(getattr(args, "quiet", False))
 
-    def say(msg: str, end: str = "\n") -> None:
-        if not quiet:
-            print(msg, end=end, flush=True)
+    El feedback (linia a linia o TUI en directe) el gestiona un ``Monitor``;
+    si no se'n passa cap, es tria segons ``--live``, el TTY i si hi ha ``rich``.
+    """
+    if monitor is None:
+        monitor = make_monitor(getattr(args, "live", "auto"),
+                               bool(getattr(args, "quiet", False)), __version__)
 
     outdir = args.outdir
     os.makedirs(outdir, exist_ok=True)
@@ -133,7 +136,8 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None) ->
     seed = args.seed if args.seed is not None else random.randrange(2**31)
     ser = transport if transport is not None else open_port(
         args.port, args.baud, args.parity, args.stopbits)
-    eng = TestEngine(ser, seed)
+    on_progress = monitor.test_progress if monitor.wants_progress else None
+    eng = TestEngine(ser, seed, on_progress=on_progress)
 
     try:
         import serial
@@ -150,8 +154,6 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None) ->
 
     plan = battery_plan(args.profile, args.bauds, args.baud)
     n_tests = sum(1 for _, k, _ in plan if k in ("traffic", "idle", "ping"))
-    say(f"\n=== BATERIA RS-485 v{__version__} === label={label} profile={args.profile} "
-        f"seed={seed}\n    {n_tests} tests | resultats a {base}.* \n")
 
     results = []
     all_lat_rows = []
@@ -159,17 +161,15 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None) ->
     t_start = time.monotonic()
     aborted = False
     skipping = False
+    monitor.battery_start(meta, n_tests, base)
     try:
         for name, kind, kw in plan:
             if kind == "baud":
                 b = kw["baud"]
-                say(f"--- canvi de baud remot -> {b} ...", end=" ")
-                if eng.set_remote_baud(b):
-                    say("OK")
-                    skipping = False
-                else:
-                    say("FALLIT (el slave no respon al nou baud); s'ometen els seus tests")
-                    skipping = True
+                baud_ok = eng.set_remote_baud(b)
+                monitor.baud_change(b, baud_ok)
+                skipping = not baud_ok
+                if not baud_ok:
                     results.append(dict(name=f"setbaud_{b}", baud=b, tx=0, ok=0,
                                         crc_err=0, mismatch=0, seq_err=0, timeout=0,
                                         junk_bytes=0, verdict="FAIL",
@@ -178,7 +178,7 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None) ->
             if skipping:
                 continue
             idx += 1
-            say(f"[{idx:>2}/{n_tests}] {name:<28}", end=" ")
+            monitor.test_start(idx, n_tests, name, kind)
             if kind == "traffic":
                 res = eng.run_traffic_test(name, **kw)
             elif kind == "idle":
@@ -200,13 +200,10 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None) ->
                 all_lat_rows.append((name, res["baud"], ms))
             res.pop("latencies_ms")
             results.append(res)
-            extra = f" | {', '.join(reasons)}" if reasons else ""
-            lat = res.get("lat") or {}
-            lati = f" p50={lat.get('p50')}ms p99={lat.get('p99')}ms" if lat else ""
-            say(f"{v:<4} tx={res.get('tx', 0)} ok={res.get('ok', 0)}{lati}{extra}")
+            monitor.test_end(res)
     except KeyboardInterrupt:
         aborted = True
-        say("\n!! Bateria interrompuda per l'usuari - es genera informe parcial")
+        monitor.note("\n!! Bateria interrompuda per l'usuari - es genera informe parcial")
     finally:
         ser.close()
 
@@ -214,7 +211,5 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None) ->
     meta["aborted"] = aborted
     write_reports(base, meta, results, all_lat_rows)
     n_fail = sum(1 for r in results if r["verdict"] == "FAIL")
-    say(f"\n=== RESULTAT GLOBAL: {'FAIL' if n_fail else 'PASS'} "
-        f"({n_fail} FAIL / {len(results)} tests, {meta['elapsed_s']}s) ===")
-    say(f"Informes: {base}.json  {base}.md  {base}_latencies.csv")
+    monitor.battery_end(results, n_fail, meta["elapsed_s"], base)
     sys.exit(1 if n_fail or aborted else 0)

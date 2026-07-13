@@ -10,7 +10,10 @@ readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Adilec by Guilera" }]
 requires-python = ">=3.9"
-dependencies = ["pyserial>=3.4"]
+dependencies = [
+    "pyserial>=3.4",
+    "rich>=13",       # TUI de feedback en directe (mode --live)
+]
 keywords = ["rs485", "serial", "test-bench", "signal-integrity", "modbus"]
 classifiers = [
     "Development Status :: 4 - Beta",

@@ -6,6 +6,19 @@ versions segons [SemVer](https://semver.org/lang/ca/).
 La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
 `rs485_labtest.py` previ al paquet (conservat a `legacy/`).
 
+## [Unreleased]
+
+### Added
+- **Feedback en directe (TUI)** amb `rich`: vista que s'actualitza in-place
+  amb barra de progres global, panell del test en curs (tx/ok, FER, p50/p99,
+  progres i sparkline de latencies) i taula de tests completats amb veredicte
+  de color. Nou flag `--live {auto,rich,plain}` a `battery` i `duo`.
+- Capa de `Monitor` (`NullMonitor` / `PlainMonitor` / `RichMonitor`) que
+  desacobla la logica de la bateria de la seva presentacio; la sortida
+  `plain` es identica a la de sempre (pipes, CI, logs).
+- Callback de progres opcional al `TestEngine`, invocat *despres* de cada RTT
+  (no en contamina la latencia) i escanyat en el temps.
+
 ## [0.3.0] - 2026-07-13
 
 ### Added
