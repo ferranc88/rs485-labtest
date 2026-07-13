@@ -132,6 +132,13 @@ def _ask_tests(console: Any) -> list[str] | None:
         console.print("[red]cap test seleccionat[/]")
 
 
+def _explain(console: Any, *lines: str) -> None:  # pragma: no cover - nomes UI
+    """Comentari breu abans d'una pregunta: que es i que conve respondre."""
+    console.print()
+    for line in lines:
+        console.print(f"[dim]💬 {line}[/]")
+
+
 def run_wizard() -> tuple[str, argparse.Namespace]:  # pragma: no cover - interactiu
     from rich.console import Console
     from rich.prompt import Confirm, FloatPrompt, IntPrompt, Prompt
@@ -140,42 +147,95 @@ def run_wizard() -> tuple[str, argparse.Namespace]:  # pragma: no cover - intera
     console.rule("[bold bright_cyan]⚡ rs485-labtest · assistent[/]")
 
     answers: dict[str, Any] = {}
+
+    _explain(console,
+             "duo = tot des d'aquest PC (arrenca el slave sol i corre la bateria).",
+             "battery = nomes el master (el slave ja corre en un altre PC).",
+             "slave = nomes l'extrem que fa eco (per a l'altre PC).")
     answers["mode"] = Prompt.ask(
         "Mode", choices=list(_MODES), default="duo")
 
+    _explain(console,
+             "El port de l'adaptador USB-RS485 que orquestra el test.",
+             "Millor una ruta /dev/serial/by-id/... : els ttyUSBn ballen entre "
+             "replugs i pots acabar testejant el link al reves.")
     answers["port"] = _ask_port(console, "Port màster (A)")
     if answers["mode"] == "duo":
+        _explain(console,
+                 "El port de l'altre extrem del link (el que fara eco).",
+                 "Ha de ser un adaptador diferent del master, connectat a "
+                 "l'altra banda del DUT.")
         answers["slave_port"] = _ask_port(console, "Port slave (B)")
 
+    _explain(console,
+             "Velocitat de treball del test. S'accepta qualsevol valor, tambe "
+             "no estandard (p.ex. 307200).",
+             "Els dos extrems s'hi posaran; el barrido de bauds extra es "
+             "pregunta despres.")
     answers["baud"] = IntPrompt.ask("Baud base", default=115200)
+
+    _explain(console,
+             "N (cap) es l'habitual en RS-485. Toca-ho nomes si el teu equip "
+             "usa paritat parell (E) o senar (O).")
     answers["parity"] = Prompt.ask("Paritat", choices=["N", "E", "O"], default="N")
 
     if answers["mode"] == "slave":
+        _explain(console,
+                 "Retard afegit abans de cada eco, per simular un esclau lent.",
+                 "0 = respondre tan rapid com es pugui (el normal).")
         answers["turnaround_us"] = IntPrompt.ask(
             "Retard artificial abans de l'eco (µs)", default=0)
         return build_namespace(answers)
 
+    _explain(console,
+             "A cada baud extra es repeteix un subconjunt representatiu de "
+             "tests (canvi remot automatic al slave, no cal tocar res).",
+             "Buit = nomes el baud base. Exemple: 9600 307200 921600")
     extra = Prompt.ask(
-        "Bauds addicionals per al barrido [dim](buit = cap; p.ex. 307200 921600)[/]",
-        default="")
+        "Bauds addicionals per al barrido", default="")
     try:
         answers["bauds"] = parse_baud_list(extra)
     except ValueError:
         console.print("[red]bauds ignorats (format invàlid)[/]")
         answers["bauds"] = []
 
+    _explain(console,
+             "smoke ~2 min: validar el muntatge. standard ~15 min: la corrida "
+             "de qualificacio habitual. soak ~2 h: volum estadistic per a la "
+             "BER i deriva termica.")
     answers["profile"] = Prompt.ask(
-        "Perfil [dim](smoke ~2min · standard ~15min · soak ~2h)[/]",
-        choices=list(_PROFILES), default="standard")
+        "Perfil", choices=list(_PROFILES), default="standard")
+
+    _explain(console,
+             "Tots = la bateria completa (recomanat per qualificar).",
+             "Un subconjunt es util per iterar rapid sobre un problema concret.")
     answers["tests"] = _ask_tests(console)
 
-    answers["label"] = Prompt.ask(
-        "Etiqueta [dim](DUT/condició, p.ex. NDR6_Vcm+7V)[/]", default="")
+    _explain(console,
+             "Identifica el DUT i la condicio de la corrida; surt al nom dels "
+             "informes. Exemple: NDR6_protoB_Vcm+7V")
+    answers["label"] = Prompt.ask("Etiqueta", default="")
+
+    _explain(console,
+             "Text lliure per a l'informe: font d'alimentacio, Vcm real "
+             "mesurada, temperatura, terminacions...")
     answers["notes"] = Prompt.ask("Notes de l'operador", default="")
-    answers["max_fer"] = FloatPrompt.ask(
-        "Llindar FER [dim](0 = cap error tolerat)[/]", default=0.0)
-    answers["max_p99"] = FloatPrompt.ask(
-        "Llindar p99 latència en ms [dim](0 = sense llindar)[/]", default=0.0)
+
+    _explain(console,
+             "Fraccio de trames amb error tolerada (0.01 = 1%).",
+             "0 = cap error tolerat: es el criteri de qualificacio per "
+             "defecte, no el relaxis sense motiu.")
+    answers["max_fer"] = FloatPrompt.ask("Llindar FER", default=0.0)
+
+    _explain(console,
+             "Si el 99% de les respostes han d'arribar dins d'un temps maxim "
+             "(aplicacions amb timeout), posa'l aqui en ms.",
+             "0 = no aplicar cap llindar de latencia.")
+    answers["max_p99"] = FloatPrompt.ask("Llindar p99 latència en ms", default=0.0)
+
+    _explain(console,
+             "rich = quadre viu amb grafics al terminal. plain = linia a "
+             "linia classica (millor per a logs). auto = decideix sol.")
     answers["live"] = Prompt.ask(
         "Vista en directe", choices=list(_LIVE), default="rich")
 
