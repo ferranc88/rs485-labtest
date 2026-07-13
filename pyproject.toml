@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rs485-labtest"
+dynamic = ["version"]
+description = "Bateria d'estres laboratory-grade per a links RS-485 half-duplex (convertidors de fibra, QC d'entrada)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Adilec by Guilera" }]
+requires-python = ">=3.9"
+dependencies = ["pyserial>=3.4"]
+keywords = ["rs485", "serial", "test-bench", "signal-integrity", "modbus"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Hardware",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.scripts]
+rs485-labtest = "rs485_labtest.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4", "mypy>=1.8"]
+
+[tool.hatch.version]
+path = "src/rs485_labtest/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rs485_labtest"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E731",  # lambdes/funcions curtes d'estadistica
+]
+
+[tool.ruff.lint.per-file-ignores]
+# taula del pla de bateria alineada en columnes: la llegibilitat mana
+"src/rs485_labtest/battery.py" = ["E501"]
+
+[tool.mypy]
+ignore_missing_imports = true
+warn_unused_ignores = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+# tots els tests son funcions; evita que pytest intenti recollir TestEngine
+python_classes = ""
+markers = [
+    "integration: bateria completa sobre ptys virtuals (nomes POSIX; lents)",
+]
