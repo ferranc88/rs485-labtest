@@ -175,6 +175,41 @@ class TestEngine:
             self._emit(res)
         return res
 
+    def run_baud_offset_test(self, name: str, offset_pct: float,
+                             pattern: str = "random", size: int = 32,
+                             gap_ms: float = 0, duration_s: float = 5,
+                             timeout: float = 0.3, warmup: int = 2) -> dict[str, Any]:
+        """Mesura el marge de tolerancia de baud del link.
+
+        Desplaça el baud del *master* un ``offset_pct`` % respecte del nominal
+        (el slave es queda al nominal) i corre trafic d'eco. Un link UART
+        tolera ~2% de desajust acumulat entre extrems; cada re-clock pel cami
+        (p.ex. conversio a fibra) en consumeix una part. El FER en funcio del
+        desajust diu quant marge queda.
+        """
+        nominal = self.ser.baudrate
+        skewed = int(round(nominal * (1.0 + offset_pct / 100.0)))
+        try:
+            self.ser.baudrate = skewed
+        except BaudNotSupported as exc:
+            return dict(name=name, pattern=pattern, size=size, gap_ms=gap_ms,
+                        duration_s=duration_s, baud=nominal, collide=False,
+                        tx=0, ok=0, crc_err=0, mismatch=0, seq_err=0, timeout=0,
+                        junk_bytes=0, latencies_ms=[],
+                        baud_offset_pct=offset_pct, baud_skewed=skewed,
+                        baud_set_failed=str(exc))
+        try:
+            res = self.run_traffic_test(name, pattern, size, gap_ms, duration_s,
+                                        timeout=timeout, warmup=warmup)
+        finally:
+            self.ser.baudrate = nominal
+            time.sleep(0.05)                  # deixar drenar el que quedi al vol
+            self.ser.reset_input_buffer()
+        res["baud"] = nominal                 # el nominal es la referencia del test
+        res["baud_offset_pct"] = offset_pct
+        res["baud_skewed"] = skewed
+        return res
+
     def sanity_ping(self, tries: int = 5) -> tuple[int, int]:
         """Comprova que el link respon (usat post-colisio)."""
         ok = 0

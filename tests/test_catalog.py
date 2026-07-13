@@ -12,7 +12,7 @@ from rs485_labtest.catalog import (
 
 def test_order_and_catalog_are_consistent():
     assert set(TEST_ORDER) == set(TEST_CATALOG)
-    assert len(TEST_ORDER) == 12
+    assert len(TEST_ORDER) == 13
 
 
 def test_every_entry_has_the_four_fields():
@@ -38,7 +38,13 @@ def test_unknown_tests():
 # ---------------------------------------------- seleccio de tests al battery_plan
 def test_battery_plan_runs_all_by_default():
     plan = battery_plan("smoke", [], 115200)
-    assert sum(1 for _, k, _ in plan if k in ("traffic", "idle", "ping")) == 12
+    kinds = [k for _, k, _ in plan if k in ("traffic", "idle", "ping", "offset")]
+    assert len(kinds) == 18                   # 12 del nucli + 6 desajustos
+
+
+def test_describe_matches_offset_entry_names():
+    from rs485_labtest.catalog import describe
+    assert describe("baud_offset+2%@115200")["title"] == "Marge de tolerancia de baud"
 
 
 def test_battery_plan_filters_to_selected_tests():

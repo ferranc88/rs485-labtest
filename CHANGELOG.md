@@ -9,6 +9,14 @@ La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
 ## [Unreleased]
 
 ### Added
+- **Test nou `baud_offset` (marge de tolerància de baud)**: el master es
+  desplaça ±1/2/3% respecte del slave i es mesura el FER a cada desajust.
+  ±1% ha de passar (`--baud-margin`, per defecte 1.0); ±2/3% són
+  caracterització (INFO) del marge restant. Motivat per la regla del sector
+  de ~2% de desajust acumulat tolerable en UART async: cada re-clock (com la
+  conversió a fibra del NDR6) consumeix part d'aquest pressupost i cap dels
+  12 tests existents ho podia detectar. La bateria passa de 12 a 13 tests
+  (18 corrides al baud base).
 - **Assistent interactiu** (`rs485-labtest wizard`): pregunta mode, ports
   (amb detecció automàtica via `serial.tools.list_ports`), bauds, quins
   tests, etiqueta i criteris, ensenya un resum i llança. Lògica de

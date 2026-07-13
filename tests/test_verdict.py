@@ -98,13 +98,14 @@ def test_ber_bound_no_traffic():
 
 
 # -------------------------------------------------------------- battery_plan
-def test_battery_plan_core_has_12_tests():
+def test_battery_plan_core_has_12_tests_plus_offset_sweep():
     plan = battery_plan("smoke", [], 115200)
     kinds = [k for _, k, _ in plan]
-    assert len(plan) == 12
+    assert len(plan) == 18                    # 12 del nucli + 6 desajustos de baud
     assert kinds.count("traffic") == 10
     assert kinds.count("idle") == 1
     assert kinds.count("ping") == 1
+    assert kinds.count("offset") == 6
 
 
 def test_battery_plan_baud_sweep_adds_subset_and_restores_base():
@@ -118,4 +119,4 @@ def test_battery_plan_baud_sweep_adds_subset_and_restores_base():
 
 def test_battery_plan_base_baud_not_repeated():
     plan = battery_plan("smoke", [115200], 115200)
-    assert len(plan) == 12                    # cap __setbaud__ per al baud base
+    assert len(plan) == 18                    # cap __setbaud__ per al baud base

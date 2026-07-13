@@ -195,6 +195,30 @@ class BitFlipDUT(BaseDUT):
             tp.deliver(self._flip(build_frame(T_DATA, seq, payload)))
 
 
+class BaudSensitiveDUT(BaseDUT):
+    """Eco correcte nomes si el baud del master es prou a prop del nominal.
+
+    Simula el pressupost de tolerancia d'un link real: mes enlla de
+    ``tolerance_pct`` el que "arriba" es brossa, com faria un UART desajustat.
+    """
+
+    def __init__(self, nominal: int = 115200, tolerance_pct: float = 1.5,
+                 seed: int = 99) -> None:
+        super().__init__()
+        self.nominal = nominal
+        self.tolerance_pct = tolerance_pct
+        self.rng = random.Random(seed)
+
+    def on_write(self, data: bytes, tp: FakeTransport) -> None:
+        off_pct = abs(tp.baudrate - self.nominal) / self.nominal * 100.0
+        if off_pct > self.tolerance_pct:
+            # desajust excessiu: la trama arriba com a soroll
+            n = max(1, len(data) // 2)
+            tp.deliver(bytes(self.rng.getrandbits(8) for _ in range(n)))
+            return
+        super().on_write(data, tp)
+
+
 class LatchUpDUT(BaseDUT):
     """Deixa de respondre despres d'una colisio: post_collision ha de donar FAIL.
 

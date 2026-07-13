@@ -26,6 +26,7 @@ TEST_ORDER: list[str] = [
     "sanity", "turnaround_gap0", "min_frames", "pattern_0x55",
     "pattern_0x00_DC", "pattern_0xFF_DC", "saturation_250B", "failsafe_paused",
     "idle_monitor", "collision_blind", "post_collision", "ber_random_long",
+    "baud_offset",
 ]
 
 TEST_CATALOG: dict[str, TestInfo] = {
@@ -112,6 +113,15 @@ TEST_CATALOG: dict[str, TestInfo] = {
         "why": "Estima/acota la BER. Amb 0 errors es reporta com a cota superior "
                "al 95% CL (< 3/n_bits), mai com a zero.",
     },
+    "baud_offset": {
+        "title": "Marge de tolerancia de baud",
+        "icon": "🎯",
+        "what": "Desplaça el baud del master ±1/2/3% respecte del slave "
+                "(que queda al nominal) i mesura el FER a cada desajust.",
+        "why": "Un link UART tolera ~2% de desajust acumulat entre extrems; "
+               "cada re-clock pel cami (conversio a fibra) en consumeix. "
+               "±1% ha de passar; on comença el FER es el marge real que queda.",
+    },
 }
 
 
@@ -121,8 +131,19 @@ def base_name(name: str) -> str:
 
 
 def describe(name: str) -> TestInfo | None:
-    """Descripcio d'un test pel seu nom (amb o sense sufix de baud)."""
-    return TEST_CATALOG.get(base_name(name))
+    """Descripcio d'un test pel seu nom (amb o sense sufixos).
+
+    Accepta ``sanity``, ``sanity@115200`` i variants amb parametres al nom
+    com ``baud_offset+2%@115200``.
+    """
+    base = base_name(name)
+    info = TEST_CATALOG.get(base)
+    if info is not None:
+        return info
+    for key, val in TEST_CATALOG.items():
+        if base.startswith(key):
+            return val
+    return None
 
 
 def unknown_tests(names: list[str]) -> list[str]:

@@ -73,6 +73,7 @@ def build_namespace(answers: dict[str, Any]) -> tuple[str, argparse.Namespace]:
         seed=answers.get("seed"),
         max_fer=float(answers.get("max_fer", 0.0)),
         max_p99=float(answers.get("max_p99", 0.0)),
+        baud_margin=float(answers.get("baud_margin", 1.0)),
         live=answers.get("live", "auto"),
         turnaround_us=int(answers.get("turnaround_us", 0)),
         verbose=False,

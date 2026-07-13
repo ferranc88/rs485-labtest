@@ -41,17 +41,20 @@ Sortida tipica:
 
 ```
 === BATERIA RS-485 v0.3.0 === label=NDR6_protoB_Vcm+0V profile=smoke seed=1830294821
-    12 tests | resultats a results/rs485_NDR6_protoB_Vcm+0V_20260713T083000Z.*
+    18 tests | resultats a results/rs485_NDR6_protoB_Vcm+0V_20260713T083000Z.*
 
-[ 1/12] sanity@115200                PASS tx=210 ok=210 p50=1.8ms p99=2.4ms
-[ 2/12] turnaround_gap0@115200       PASS tx=1893 ok=1893 p50=1.7ms p99=2.2ms
+[ 1/18] sanity@115200                PASS tx=210 ok=210 p50=1.8ms p99=2.4ms
+[ 2/18] turnaround_gap0@115200       PASS tx=1893 ok=1893 p50=1.7ms p99=2.2ms
 ...
-[ 9/12] idle_monitor@115200          PASS tx=0 ok=0
-[10/12] collision_blind@115200       INFO tx=1420 ok=0 | test de colisio: vegeu post_collision
-[11/12] post_collision@115200        PASS tx=5 ok=5 p50=1.9ms p99=2.1ms
-[12/12] ber_random_long@115200       PASS tx=641 ok=641 p50=13.2ms p99=14.0ms
+[ 9/18] idle_monitor@115200          PASS tx=0 ok=0
+[10/18] collision_blind@115200       INFO tx=1420 ok=0 | test de colisio: vegeu post_collision
+[11/18] post_collision@115200        PASS tx=5 ok=5 p50=1.9ms p99=2.1ms
+[12/18] ber_random_long@115200       PASS tx=641 ok=641 p50=13.2ms p99=14.0ms
+[13/18] baud_offset+1%@115200        PASS tx=163 ok=163 p50=1.9ms p99=2.3ms
+...
+[17/18] baud_offset+3%@115200        INFO tx=16 ok=0 | desajust +3.0%: FER 100.00% (caracteritzacio del marge)
 
-=== RESULTAT GLOBAL: PASS (0 FAIL / 12 tests, 94.2s) ===
+=== RESULTAT GLOBAL: PASS (0 FAIL / 18 tests, 128.6s) ===
 ```
 
 Codi de sortida: `0` si tot PASS, `1` si hi ha cap FAIL o la corrida
@@ -98,7 +101,7 @@ Munta la mateixa comanda que faries a mà i, després d'un resum, la llança.
 | `wizard` | assistent interactiu: pregunta i llança |
 | `slave` | escolta i fa eco; obeeix el canvi de baud remot (CMD_BAUD) |
 | `master` | test individual manual amb parametres lliures |
-| `battery` | bateria automatitzada de 12 tests + informes |
+| `battery` | bateria automatitzada de 13 tests (18 corrides) + informes |
 | `duo` | arrenca el `slave` com a subproces i corre la `battery` des d'un sol PC |
 
 Cada test s'explica pel camí (què fa i per què) tant a la TUI com en mode pla.
@@ -111,8 +114,13 @@ rs485-labtest duo --port ... --slave-port ... \
 
 Tests disponibles: `sanity`, `turnaround_gap0`, `min_frames`, `pattern_0x55`,
 `pattern_0x00_DC`, `pattern_0xFF_DC`, `saturation_250B`, `failsafe_paused`,
-`idle_monitor`, `collision_blind`, `post_collision`, `ber_random_long`
-(detall a [docs/TESTPLAN.md](docs/TESTPLAN.md)).
+`idle_monitor`, `collision_blind`, `post_collision`, `ber_random_long`,
+`baud_offset` (detall a [docs/TESTPLAN.md](docs/TESTPLAN.md)).
+
+El `baud_offset` mesura el **marge de tolerància de baud** del link: el
+master es desplaça ±1/2/3% (el slave no es toca) i s'apunta on comença el
+FER. ±1% ha de passar (`--baud-margin`); ±2/3% són caracterització — clau
+per a convertidors que re-clocken el senyal, com el NDR6.
 
 ## Flags principals (`battery` / `duo`)
 
@@ -165,7 +173,7 @@ diferencial a l'oscil·loscopi.
 ## Documentacio
 
 - [docs/SETUP.md](docs/SETUP.md) — muntatge del banc, `latency_timer`, permisos, noms by-id
-- [docs/TESTPLAN.md](docs/TESTPLAN.md) — els 12 tests: que estressa cadascun i que significa un FAIL
+- [docs/TESTPLAN.md](docs/TESTPLAN.md) — els 13 tests: que estressa cadascun i que significa un FAIL
 - [docs/NDR6_MATRIX.md](docs/NDR6_MATRIX.md) — matriu de mode comu per al cas NDR6
 
 ## Desenvolupament

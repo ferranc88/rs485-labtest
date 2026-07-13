@@ -61,6 +61,10 @@ def _battery_opts(p: argparse.ArgumentParser) -> None:
     p.add_argument("--max-fer", type=float, default=0.0, help="llindar FER (0 = cap error)")
     p.add_argument("--max-p99", type=float, default=0.0,
                    help="llindar p99 latencia en ms (0 = sense llindar)")
+    p.add_argument("--baud-margin", type=float, default=1.0,
+                   help="desajust de baud (%%) que el link HA de tolerar al test "
+                        "baud_offset; els desajustos mes grans son caracteritzacio "
+                        "informativa (per defecte 1.0)")
     p.add_argument("--live", choices=["auto", "rich", "plain"], default="auto",
                    help="feedback en directe: auto (TUI si hi ha terminal), "
                         "rich (forca la TUI), plain (linia a linia)")

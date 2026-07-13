@@ -1,8 +1,9 @@
-# Pla de tests: els 12 tests de la bateria
+# Pla de tests: els 13 tests de la bateria
 
-Cada corrida executa aquests 12 tests al baud base (i un subconjunt
+Cada corrida executa aquests tests al baud base (i un subconjunt
 representatiu a cada baud extra de `--bauds`). Els parametres de durada
-depenen del perfil (`smoke` / `standard` / `soak`).
+depenen del perfil (`smoke` / `standard` / `soak`). El test 13 (marge de
+baud) es desplega en 6 subcorrides (±1/2/3%).
 
 | # | Test | Que fa | Que estressa |
 |---|------|--------|--------------|
@@ -18,6 +19,7 @@ depenen del perfil (`smoke` / `standard` / `soak`).
 | 10 | `collision_blind` | transmissio cega sense esperar resposta | solapaments deliberats: com es comporta el DUT sota colisions |
 | 11 | `post_collision` | 5 pings de sanitat despres de les colisions | recuperacio: que cap transceptor s'hagi quedat encallat en TX |
 | 12 | `ber_random_long` | trafic aleatori llarg | estimacio/cota de BER amb volum estadistic |
+| 13 | `baud_offset` | el master es desplaça ±1/2/3% del baud nominal (el slave no es toca) | el pressupost de tolerancia de baud del link sencer |
 
 ## Que significa cada FAIL
 
@@ -55,6 +57,19 @@ aquest test.
 ### p99 >> p50 a les latencies
 Turnaround **no determinista**: auto-baud, buffers d'emmagatzematge i
 reenviament o timers interns del convertidor.
+
+### `baud_offset`: com llegir el marge
+Un link UART asincron tolera **~2% de desajust de baud acumulat** entre
+emissor i receptor (limit teoric ~3,3% amb mostreig 16x). Cada re-clock pel
+cami — i una conversio a fibra en sol fer — **consumeix part d'aquest
+pressupost**. El test desplaça nomes el baud del master:
+
+- **±1% ha de passar** (llindar `--baud-margin`, per defecte 1.0): si falla,
+  el pressupost del link ja esta esgotat per la propia cadena i qualsevol
+  client amb un oscil.lador mediocre patira.
+- **±2% i ±3% son caracteritzacio** (INFO): el punt on comença el FER es el
+  marge real que queda. Un redisseny sa hauria de mantenir o millorar aquest
+  punt respecte del prototip anterior — compareu-lo entre corrides.
 
 ## La BER
 

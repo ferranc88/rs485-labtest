@@ -19,6 +19,10 @@ from .protocol import HDR_LEN
 from .report import write_reports
 from .transport import Transport, open_port
 
+# desajustos de baud provats (en %); ±1% ha de passar (llindar --baud-margin),
+# la resta caracteritza on es trenca el link (INFO)
+BAUD_OFFSETS_PCT = (1.0, -1.0, 2.0, -2.0, 3.0, -3.0)
+
 
 def battery_plan(profile: str, bauds: list[int], base_baud: int,
                  tests: list[str] | None = None
@@ -51,6 +55,13 @@ def battery_plan(profile: str, bauds: list[int], base_baud: int,
         core = [t for t in core if t[0] in want]
 
     plan = [(f"{name}@{base_baud}", kind, kw) for name, kind, kw in core]
+
+    # marge de tolerancia de baud: el master es desplaça, el slave queda al nominal
+    if tests is None or "baud_offset" in tests:
+        for off in BAUD_OFFSETS_PCT:
+            plan.append((f"baud_offset{off:+g}%@{base_baud}", "offset",
+                         dict(offset_pct=off, pattern="random", size=32,
+                              gap_ms=0, duration_s=d["short"], timeout=0.3)))
     # barrido de bauds: subset representatiu a cada baud extra
     subset = ["turnaround_gap0", "pattern_0x00_DC", "failsafe_paused", "idle_monitor"]
     for b in bauds:
@@ -75,6 +86,17 @@ def verdict(res: dict[str, Any], max_fer: float,
         return ("FAIL" if reasons else "PASS"), reasons
     if res.get("collide"):
         return "INFO", ["test de colisio: vegeu post_collision"]
+    off = res.get("baud_offset_pct")
+    if off is not None:
+        if res.get("baud_set_failed"):
+            msg = f"no s'ha pogut fixar el baud desplaçat: {res['baud_set_failed']}"
+            return ("FAIL" if res.get("offset_required") else "INFO"), [msg]
+        if not res.get("offset_required"):
+            errs = res["crc_err"] + res["mismatch"] + res["seq_err"] + res["timeout"]
+            fer = errs / res["tx"] if res["tx"] else 0.0
+            return "INFO", [f"desajust {off:+.1f}%: FER {100 * fer:.2f}% "
+                            f"(caracteritzacio del marge)"]
+        # dins del marge exigit: cauen els criteris normals de mes avall
     errs = res["crc_err"] + res["mismatch"] + res["seq_err"] + res["timeout"]
     fer = errs / res["tx"] if res["tx"] else 0.0
     if fer > max_fer:
@@ -158,12 +180,13 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
                 stopbits=args.stopbits, profile=args.profile, seed=seed,
                 bauds=args.bauds, max_fer=args.max_fer, max_p99_ms=args.max_p99,
                 tests=getattr(args, "tests", None),
+                baud_margin=getattr(args, "baud_margin", 1.0),
                 platform=platform.platform(), python=sys.version.split()[0],
                 pyserial=pyserial_version, operator_notes=args.notes or "")
 
     plan = battery_plan(args.profile, args.bauds, args.baud,
                         tests=getattr(args, "tests", None))
-    n_tests = sum(1 for _, k, _ in plan if k in ("traffic", "idle", "ping"))
+    n_tests = sum(1 for _, k, _ in plan if k in ("traffic", "idle", "ping", "offset"))
 
     results = []
     all_lat_rows = []
@@ -191,6 +214,10 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
             monitor.test_start(idx, n_tests, name, kind)
             if kind == "traffic":
                 res = eng.run_traffic_test(name, **kw)
+            elif kind == "offset":
+                res = eng.run_baud_offset_test(name, **kw)
+                res["offset_required"] = (
+                    abs(res["baud_offset_pct"]) <= getattr(args, "baud_margin", 1.0))
             elif kind == "idle":
                 res = eng.run_idle_monitor(name, **kw)
             elif kind == "ping":

@@ -95,6 +95,70 @@ def test_serial_transport_baud_setter_translates_error():
         st.baudrate = 921600
 
 
+def test_run_baud_offset_within_tolerance_passes():
+    from fakes import BaudSensitiveDUT
+    from rs485_labtest.battery import verdict
+
+    tp = FakeTransport(BaudSensitiveDUT(nominal=115200, tolerance_pct=1.5))
+    eng = TestEngine(tp, seed=1)
+    res = eng.run_baud_offset_test("baud_offset+1%", 1.0, duration_s=0.3, timeout=0.05)
+    assert res["ok"] > 0
+    assert tp.baudrate == 115200            # baud restaurat al nominal
+    assert res["baud"] == 115200            # el resultat referencia el nominal
+    assert res["baud_skewed"] == 116352
+    res["offset_required"] = True
+    assert verdict(res, 0.0, 0.0)[0] == "PASS"
+
+
+def test_run_baud_offset_beyond_tolerance_reports_margin_as_info():
+    from fakes import BaudSensitiveDUT
+    from rs485_labtest.battery import verdict
+
+    tp = FakeTransport(BaudSensitiveDUT(nominal=115200, tolerance_pct=1.5))
+    eng = TestEngine(tp, seed=1)
+    res = eng.run_baud_offset_test("baud_offset+3%", 3.0, duration_s=0.3, timeout=0.05)
+    assert res["ok"] == 0                   # el link ja no aguanta el desajust
+    assert tp.baudrate == 115200
+    res["offset_required"] = False
+    v, reasons = verdict(res, 0.0, 0.0)
+    assert v == "INFO"
+    assert "desajust +3.0%" in reasons[0]
+
+
+def test_run_baud_offset_ceiling_restores_and_verdicts():
+    from rs485_labtest.battery import verdict
+
+    tp = FakeTransport(PerfectDUT(), max_baud=115200)   # no pot pujar gens
+    eng = TestEngine(tp, seed=1)
+    res = eng.run_baud_offset_test("baud_offset+2%", 2.0, duration_s=0.1)
+    assert res.get("baud_set_failed")
+    assert tp.baudrate == 115200
+    res["offset_required"] = False
+    assert verdict(res, 0.0, 0.0)[0] == "INFO"
+    res["offset_required"] = True
+    assert verdict(res, 0.0, 0.0)[0] == "FAIL"
+
+
+def test_battery_plan_includes_offset_entries_at_base_baud():
+    from rs485_labtest.battery import BAUD_OFFSETS_PCT
+
+    plan = battery_plan("smoke", [], 115200)
+    offs = [n for n, k, _ in plan if k == "offset"]
+    assert offs == [f"baud_offset{o:+g}%@115200" for o in BAUD_OFFSETS_PCT]
+
+
+def test_battery_plan_offsets_excluded_when_not_selected():
+    plan = battery_plan("smoke", [], 115200, tests=["sanity"])
+    assert not any(k == "offset" for _, k, _ in plan)
+
+
+def test_battery_plan_offsets_included_when_selected():
+    plan = battery_plan("smoke", [], 115200, tests=["baud_offset"])
+    kinds = [k for _, k, _ in plan]
+    assert kinds.count("offset") == 6
+    assert kinds.count("traffic") == 0
+
+
 def test_slave_obeys_nonstandard_remote_baud():
     # El costat slave: en rebre CMD_BAUD a 307200, ha de fixar-lo al seu port.
     from rs485_labtest.slave import run_slave

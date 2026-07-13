@@ -88,7 +88,7 @@ def test_duo_smoke_battery_passes_on_virtual_link(tmp_path):
         doc = json.load(f)
     assert doc["meta"]["aborted"] is False
     assert doc["meta"]["seed"] == 42
-    assert len(doc["results"]) == 12
+    assert len(doc["results"]) == 18          # 12 del nucli + 6 desajustos de baud
     verdicts = {r["name"]: r["verdict"] for r in doc["results"]}
     assert all(v in ("PASS", "INFO") for v in verdicts.values()), verdicts
     assert "RESULTAT GLOBAL: PASS" in proc.stdout
