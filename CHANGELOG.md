@@ -9,6 +9,11 @@ La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
 ## [Unreleased]
 
 ### Added
+- **Suport explícit a baud rates alts i no estàndard** (p.ex. 307200): ja
+  s'acceptaven, però ara si l'adaptador no pot amb un baud es llença
+  `BaudNotSupported` amb el valor i pistes, en lloc d'un traceback; dins d'un
+  barrido, aquell baud es marca FAIL i la resta continua. Documentats els
+  sostres per xip i la tolerància de desajust a `docs/SETUP.md`.
 - **Feedback en directe (TUI)** amb `rich`: vista que s'actualitza in-place
   amb barra de progres global, panell del test en curs (tx/ok, FER, p50/p99,
   progres i sparkline de latencies) i taula de tests completats amb veredicte

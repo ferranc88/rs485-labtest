@@ -25,6 +25,14 @@ class WriteTimeout(Exception):
     """El ``write`` ha vencut el write_timeout (buffer de sortida ple)."""
 
 
+class BaudNotSupported(Exception):
+    """L'adaptador/driver no ha pogut fixar el baud rate demanat.
+
+    Tipic amb bauds molt alts o no estandard (p.ex. 307200): cada xip te el
+    seu maxim i la seva graella de divisors. Vegeu ``docs/SETUP.md``.
+    """
+
+
 @runtime_checkable
 class Transport(Protocol):
     """Interficie minima que necessita el motor de tests."""
@@ -63,7 +71,11 @@ class SerialTransport:
 
     @baudrate.setter
     def baudrate(self, value: int) -> None:
-        self._ser.baudrate = value
+        try:
+            self._ser.baudrate = value
+        except (ValueError, OSError) as exc:
+            raise BaudNotSupported(
+                f"l'adaptador no ha pogut fixar {value} bps: {exc}") from exc
 
     @property
     def in_waiting(self) -> int:
@@ -99,8 +111,21 @@ def open_port(port: str, baud: int, parity: str = "N",
     p = {"N": serial.PARITY_NONE, "E": serial.PARITY_EVEN, "O": serial.PARITY_ODD}[parity]
     s = {1: serial.STOPBITS_ONE, 1.5: serial.STOPBITS_ONE_POINT_FIVE,
          2: serial.STOPBITS_TWO}[stopbits]
-    ser = serial.Serial(port=port, baudrate=baud, bytesize=8, parity=p,
-                        stopbits=s, timeout=0.01, write_timeout=2)
+    try:
+        ser = serial.Serial(port=port, baudrate=baud, bytesize=8, parity=p,
+                            stopbits=s, timeout=0.01, write_timeout=2)
+    except (ValueError, OSError) as exc:
+        # separem "no puc obrir el port" de "no puc amb aquest baud"
+        if isinstance(exc, ValueError) or "baud" in str(exc).lower():
+            raise BaudNotSupported(
+                f"no s'ha pogut obrir {port} a {baud} bps: {exc}\n"
+                f"  - cada xip te el seu maxim: FTDI FT232R fins ~3M, "
+                f"FT2232H/FT232H fins 12M; CP210x ~2M; CH340 ~2M.\n"
+                f"  - els bauds no estandard (p.ex. 307200) es generen amb "
+                f"divisor fraccionari; RS-485 tolera <~2-3% de desajust.\n"
+                f"  - a Linux baixa el latency_timer a 1 (vegeu docs/SETUP.md)."
+            ) from exc
+        raise
     time.sleep(0.15)
     ser.reset_input_buffer()
     ser.reset_output_buffer()

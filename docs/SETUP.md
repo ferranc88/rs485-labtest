@@ -58,6 +58,56 @@ echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB1/latency_timer
   caracteritzar es precisament el failsafe del DUT. Si l'adaptador USB porta
   bias propi commutable, documenteu-ne l'estat a `--notes`.
 
+## Baud rates alts i no estàndard
+
+L'eina accepta **qualsevol** valor de baud, tant a `--baud` com al barrido
+`--bauds` (canvi remot al slave). No hi ha cap topall al programari; el límit
+real és l'adaptador i el driver.
+
+### Valors no estàndard (p.ex. 307200)
+Un baud que no és a la taula clàssica (com **307200** = 300 × 1024) es genera
+amb el **divisor fraccionari** del xip. Conseqüències pràctiques:
+
+- A Linux, pyserial el fixa via `termios2`/`BOTHER` sense cap pas extra:
+  `--baud 307200` funciona directament.
+- El divisor pot no donar el valor **exacte**: el baud real queda a poques
+  dècimes de %. RS-485 (UART async) tolera un desajust total emissor-receptor
+  de **~2-3%** abans de mostrejar malament, així que 307200 real vs. nominal
+  no és problema — però si sospites, mira'l amb l'oscil·loscopi (període de
+  bit) i compara amb l'altre extrem.
+- Els dos extrems han d'anar al **mateix** baud. El barrido ja ho garanteix
+  (canvi remot via CMD_BAUD); si els poses a mà, posa el mateix nombre a
+  `slave` i a `battery`.
+
+### Sostres típics per xip
+| Xip de l'adaptador | Baud màxim pràctic |
+|---|---|
+| FTDI FT232R | ~3 Mbaud |
+| FTDI FT2232H / FT232H | fins a 12 Mbaud |
+| Silicon Labs CP210x | ~2 Mbaud (models nous) |
+| WCH CH340 / CH341 | ~2 Mbaud |
+
+Si demanes un baud per sobre del que l'adaptador pot generar, l'eina
+ara ho diu clar (`BaudNotSupported`, amb el valor i pistes) en lloc de petar
+amb un traceback. Dins d'un barrido, aquell baud es marca FAIL i la resta
+continua.
+
+### A tenir en compte a baud alt
+- Baixa el **`latency_timer` a 1 ms** (secció anterior): a 2-3 Mbaud, els 16 ms
+  per defecte del FTDI dominen completament la latència mesurada.
+- El coll d'ampolla passa a ser el **turnaround** i el USB, no el fil: veuràs
+  la latència plana i el throughput pujar amb el baud.
+- Fils curts i terminació correcta són més crítics com més amunt vas
+  (reflexions i slew-rate).
+
+Exemple amb l'aplicació de 307200 i un barrido cap amunt:
+```bash
+rs485-labtest duo \
+    --port /dev/serial/by-id/<A> --slave-port /dev/serial/by-id/<B> \
+    --baud 307200 --bauds 921600 2000000 \
+    --profile standard --label "NDR6_app307k2" --live rich
+```
+
 ## Primera corrida
 
 ```bash

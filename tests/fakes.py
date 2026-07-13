@@ -13,17 +13,34 @@ import time
 from typing import Any
 
 from rs485_labtest.protocol import T_ACK, T_CMD_BAUD, T_DATA, FrameReader, build_frame
+from rs485_labtest.transport import BaudNotSupported
 
 
 class FakeTransport:
-    """Implementacio en memoria de la interficie Transport."""
+    """Implementacio en memoria de la interficie Transport.
 
-    def __init__(self, dut: BaseDUT, baudrate: int = 115200) -> None:
+    ``max_baud`` simula el sostre d'un adaptador real: fixar un baud per sobre
+    llenca ``BaudNotSupported``, com faria el driver amb un baud massa alt.
+    """
+
+    def __init__(self, dut: BaseDUT, baudrate: int = 115200,
+                 max_baud: int | None = None) -> None:
         self.dut = dut
-        self.baudrate = baudrate
+        self.max_baud = max_baud
+        self._baud = baudrate
         self.rx = bytearray()
         self.pending: list[tuple[float, bytes]] = []   # (instant_llest, dades)
         self.closed = False
+
+    @property
+    def baudrate(self) -> int:
+        return self._baud
+
+    @baudrate.setter
+    def baudrate(self, value: int) -> None:
+        if self.max_baud is not None and value > self.max_baud:
+            raise BaudNotSupported(f"{value} > sostre {self.max_baud}")
+        self._baud = value
 
     # ---- costat DUT ----
     def deliver(self, data: bytes, delay_s: float = 0.0) -> None:

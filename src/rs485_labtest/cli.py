@@ -13,7 +13,7 @@ from . import __version__
 from .battery import lat_stats, run_battery, verdict
 from .engine import TestEngine
 from .slave import run_slave
-from .transport import open_port
+from .transport import BaudNotSupported, open_port
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +36,9 @@ Criteris PASS/FAIL per defecte (ajustables):
 
 def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--port", required=True)
-    p.add_argument("--baud", type=int, default=115200)
+    p.add_argument("--baud", type=int, default=115200,
+                   help="baud base; s'accepta qualsevol valor, tambe alt o no "
+                        "estandard (p.ex. 307200), fins on arribi l'adaptador")
     p.add_argument("--parity", choices=["N", "E", "O"], default="N")
     p.add_argument("--stopbits", type=float, choices=[1, 1.5, 2], default=1)
 
@@ -61,7 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     _common(pb)
     pb.add_argument("--profile", choices=["smoke", "standard", "soak"], default="standard")
     pb.add_argument("--bauds", type=int, nargs="*", default=[],
-                    help="bauds addicionals per al barrido, p.ex. --bauds 9600 921600")
+                    help="bauds addicionals per al barrido (canvi remot al slave); "
+                         "s'accepten valors alts/no estandard, p.ex. "
+                         "--bauds 9600 307200 921600 2000000")
     pb.add_argument("--label", default="", help="identificador del DUT/condicio (Vcm, temp...)")
     pb.add_argument("--notes", default="", help="notes de l'operador per a l'informe")
     pb.add_argument("--outdir", default="results")
@@ -135,25 +139,28 @@ def main(argv: list[str] | None = None) -> None:
         level = logging.WARNING
     logging.basicConfig(level=level, format="%(message)s")
 
-    if args.mode == "slave":
-        run_slave(args.port, args.baud, args.parity, args.stopbits,
-                  turnaround_us=args.turnaround_us)
-    elif args.mode == "battery":
-        args.bauds = list(dict.fromkeys(args.bauds))   # dedupe, conserva ordre
-        run_battery(args)
-    elif args.mode == "duo":
-        args.bauds = list(dict.fromkeys(args.bauds))
-        _run_duo(args)
-    else:
-        ser = open_port(args.port, args.baud, args.parity, args.stopbits)
-        eng = TestEngine(ser, seed=0)
-        res = eng.run_traffic_test("manual", args.pattern, args.size,
-                                   args.gap, args.duration,
-                                   timeout=args.timeout, collide=args.collide)
-        v, reasons = verdict(res, 0.0, 0.0)
-        res["lat"] = lat_stats(res.pop("latencies_ms"))
-        print(json.dumps(dict(res, verdict=v, reasons=reasons), indent=2))
-        ser.close()
+    try:
+        if args.mode == "slave":
+            run_slave(args.port, args.baud, args.parity, args.stopbits,
+                      turnaround_us=args.turnaround_us)
+        elif args.mode == "battery":
+            args.bauds = list(dict.fromkeys(args.bauds))   # dedupe, conserva ordre
+            run_battery(args)
+        elif args.mode == "duo":
+            args.bauds = list(dict.fromkeys(args.bauds))
+            _run_duo(args)
+        else:
+            ser = open_port(args.port, args.baud, args.parity, args.stopbits)
+            eng = TestEngine(ser, seed=0)
+            res = eng.run_traffic_test("manual", args.pattern, args.size,
+                                       args.gap, args.duration,
+                                       timeout=args.timeout, collide=args.collide)
+            v, reasons = verdict(res, 0.0, 0.0)
+            res["lat"] = lat_stats(res.pop("latencies_ms"))
+            print(json.dumps(dict(res, verdict=v, reasons=reasons), indent=2))
+            ser.close()
+    except BaudNotSupported as exc:
+        sys.exit(f"[baud] {exc}")
 
 
 if __name__ == "__main__":  # pragma: no cover

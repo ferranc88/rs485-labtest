@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 from .patterns import make_payload
 from .protocol import T_ACK, T_CMD_BAUD, T_DATA, FrameReader, build_frame
-from .transport import Transport, WriteTimeout
+from .transport import BaudNotSupported, Transport, WriteTimeout
 
 ProgressCB = Callable[["dict[str, Any]"], None]
 
@@ -77,7 +77,12 @@ class TestEngine:
             self.seq += 1
             if st == "ok":
                 time.sleep(0.15)
-                self.ser.baudrate = new_baud
+                try:
+                    self.ser.baudrate = new_baud
+                except BaudNotSupported:
+                    # el nostre extrem no pot amb aquest baud: aquell baud
+                    # queda marcat com a fallit, pero la bateria continua
+                    return False
                 self.ser.reset_input_buffer()
                 # ping de verificacio al nou baud
                 st2, _, _ = self._exchange(T_DATA, b"\x55\xAA", timeout=1.0)

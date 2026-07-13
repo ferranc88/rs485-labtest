@@ -106,6 +106,16 @@ a ~5 refrescos/s.
 Els criteris per defecte (FER = 0, junk = 0) son intencionals: aixo es una
 eina de **qualificacio**, no de monitoritzacio.
 
+### Baud rates alts i no estàndard
+
+`--baud` i `--bauds` accepten **qualsevol** valor, també alt o no estàndard
+(p.ex. `--baud 307200`, o `--bauds 921600 2000000`). No hi ha topall al
+programari; el límit és l'adaptador (FTDI fins a 3M/12M, CP210x/CH340 ~2M).
+Els valors no estàndard es generen amb divisor fraccionari — RS-485 tolera
+<~2-3% de desajust. Si l'adaptador no pot amb un baud, l'eina ho diu clar
+(`BaudNotSupported`) i, dins d'un barrido, salta aquell baud i continua.
+Detalls i sostres per xip a [docs/SETUP.md](docs/SETUP.md#baud-rates-alts-i-no-estàndard).
+
 ## Llegir l'informe
 
 Cada corrida genera tres fitxers amb timestamp UTC i el `--label`:
