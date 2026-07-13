@@ -21,7 +21,8 @@ def build_frame() -> RichMonitor:
 
     m = RichMonitor("0.3.0")
     # estat inicial sense engegar la sessio Live (nomes volem un frame estatic)
-    m.meta = dict(label="NDR6_protoB_Vcm+7V", profile="standard", seed=1830294821)
+    m.meta = dict(label="NDR6_protoB_Vcm+7V", profile="standard", seed=1830294821,
+                  base_baud=115200, bauds=[307200, 921600])
     m.n_tests = 12
     m.base = "results/rs485_x"
     m.t_start = time.monotonic() - 132.0

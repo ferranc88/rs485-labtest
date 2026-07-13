@@ -62,7 +62,9 @@ def test_plain_monitor_reproduces_classic_output(capsys):
     out = capsys.readouterr().out
     assert "=== BATERIA RS-485 v0.3.0 ===" in out
     assert "[ 1/12] sanity@115200" in out
-    assert "PASS tx=200 ok=200 p50=1.8ms p99=2.4ms" in out
+    # descriu que fa i per que cada test
+    assert "què:" in out and "per què:" in out
+    assert "→ PASS tx=200 ok=200 p50=1.8ms p99=2.4ms" in out
     assert "RESULTAT GLOBAL: PASS (0 FAIL / 1 tests, 94.2s)" in out
 
 

@@ -11,6 +11,7 @@ import time
 
 from . import __version__
 from .battery import lat_stats, run_battery, verdict
+from .catalog import TEST_ORDER, unknown_tests
 from .engine import TestEngine
 from .slave import run_slave
 from .transport import BaudNotSupported, open_port
@@ -43,6 +44,28 @@ def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--stopbits", type=float, choices=[1, 1.5, 2], default=1)
 
 
+def _battery_opts(p: argparse.ArgumentParser) -> None:
+    """Opcions comunes de battery i duo."""
+    p.add_argument("--profile", choices=["smoke", "standard", "soak"], default="standard")
+    p.add_argument("--bauds", type=int, nargs="*", default=[],
+                   help="bauds addicionals per al barrido (canvi remot al slave); "
+                        "s'accepten valors alts/no estandard, p.ex. "
+                        "--bauds 9600 307200 921600 2000000")
+    p.add_argument("--tests", nargs="*", default=None, metavar="TEST",
+                   help="corre nomes aquests tests del nucli (per defecte tots); "
+                        f"noms valids: {', '.join(TEST_ORDER)}")
+    p.add_argument("--label", default="", help="identificador del DUT/condicio (Vcm, temp...)")
+    p.add_argument("--notes", default="", help="notes de l'operador per a l'informe")
+    p.add_argument("--outdir", default="results")
+    p.add_argument("--seed", type=int, default=None, help="llavor RNG (reproduibilitat)")
+    p.add_argument("--max-fer", type=float, default=0.0, help="llindar FER (0 = cap error)")
+    p.add_argument("--max-p99", type=float, default=0.0,
+                   help="llindar p99 latencia en ms (0 = sense llindar)")
+    p.add_argument("--live", choices=["auto", "rich", "plain"], default="auto",
+                   help="feedback en directe: auto (TUI si hi ha terminal), "
+                        "rich (forca la TUI), plain (linia a linia)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="rs485-labtest", description=DESCRIPTION,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -59,23 +82,11 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--turnaround-us", type=int, default=0,
                     help="retard artificial abans de l'eco")
 
+    sub.add_parser("wizard", help="assistent interactiu: et pregunta i llança")
+
     pb = sub.add_parser("battery", help="bateria automatitzada (master)")
     _common(pb)
-    pb.add_argument("--profile", choices=["smoke", "standard", "soak"], default="standard")
-    pb.add_argument("--bauds", type=int, nargs="*", default=[],
-                    help="bauds addicionals per al barrido (canvi remot al slave); "
-                         "s'accepten valors alts/no estandard, p.ex. "
-                         "--bauds 9600 307200 921600 2000000")
-    pb.add_argument("--label", default="", help="identificador del DUT/condicio (Vcm, temp...)")
-    pb.add_argument("--notes", default="", help="notes de l'operador per a l'informe")
-    pb.add_argument("--outdir", default="results")
-    pb.add_argument("--seed", type=int, default=None, help="llavor RNG (reproduibilitat)")
-    pb.add_argument("--max-fer", type=float, default=0.0, help="llindar FER (0 = cap error)")
-    pb.add_argument("--max-p99", type=float, default=0.0,
-                    help="llindar p99 latencia en ms (0 = sense llindar)")
-    pb.add_argument("--live", choices=["auto", "rich", "plain"], default="auto",
-                    help="feedback en directe: auto (TUI si hi ha terminal), "
-                         "rich (forca la TUI), plain (linia a linia)")
+    _battery_opts(pb)
 
     pm = sub.add_parser("master", help="test individual manual")
     _common(pm)
@@ -90,17 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     _common(pd)                       # --port = extrem master (A)
     pd.add_argument("--slave-port", required=True,
                     help="port de l'extrem que fa eco (B), p.ex. /dev/ttyUSB1")
-    pd.add_argument("--profile", choices=["smoke", "standard", "soak"], default="standard")
-    pd.add_argument("--bauds", type=int, nargs="*", default=[])
-    pd.add_argument("--label", default="")
-    pd.add_argument("--notes", default="")
-    pd.add_argument("--outdir", default="results")
-    pd.add_argument("--seed", type=int, default=None)
-    pd.add_argument("--max-fer", type=float, default=0.0)
-    pd.add_argument("--max-p99", type=float, default=0.0)
-    pd.add_argument("--live", choices=["auto", "rich", "plain"], default="auto",
-                    help="feedback en directe: auto (TUI si hi ha terminal), "
-                         "rich (forca la TUI), plain (linia a linia)")
+    _battery_opts(pd)
     return ap
 
 
@@ -129,36 +130,55 @@ def _run_duo(args: argparse.Namespace) -> None:
         log.info("[duo] slave aturat")
 
 
+def _validate_tests(args: argparse.Namespace) -> None:
+    tests = getattr(args, "tests", None)
+    if tests:
+        bad = unknown_tests(tests)
+        if bad:
+            sys.exit(f"[tests] noms desconeguts: {', '.join(bad)}\n"
+                     f"  valids: {', '.join(TEST_ORDER)}")
+
+
+def _dispatch(args: argparse.Namespace) -> None:
+    if args.mode == "slave":
+        run_slave(args.port, args.baud, args.parity, args.stopbits,
+                  turnaround_us=args.turnaround_us)
+    elif args.mode == "battery":
+        args.bauds = list(dict.fromkeys(args.bauds))   # dedupe, conserva ordre
+        _validate_tests(args)
+        run_battery(args)
+    elif args.mode == "duo":
+        args.bauds = list(dict.fromkeys(args.bauds))
+        _validate_tests(args)
+        _run_duo(args)
+    else:
+        ser = open_port(args.port, args.baud, args.parity, args.stopbits)
+        eng = TestEngine(ser, seed=0)
+        res = eng.run_traffic_test("manual", args.pattern, args.size,
+                                   args.gap, args.duration,
+                                   timeout=args.timeout, collide=args.collide)
+        v, reasons = verdict(res, 0.0, 0.0)
+        res["lat"] = lat_stats(res.pop("latencies_ms"))
+        print(json.dumps(dict(res, verdict=v, reasons=reasons), indent=2))
+        ser.close()
+
+
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
 
     level = logging.INFO
-    if args.verbose:
+    if getattr(args, "verbose", False):
         level = logging.DEBUG
-    elif args.quiet:
+    elif getattr(args, "quiet", False):
         level = logging.WARNING
     logging.basicConfig(level=level, format="%(message)s")
 
+    if args.mode == "wizard":
+        from .wizard import run_wizard
+        _, args = run_wizard()
+
     try:
-        if args.mode == "slave":
-            run_slave(args.port, args.baud, args.parity, args.stopbits,
-                      turnaround_us=args.turnaround_us)
-        elif args.mode == "battery":
-            args.bauds = list(dict.fromkeys(args.bauds))   # dedupe, conserva ordre
-            run_battery(args)
-        elif args.mode == "duo":
-            args.bauds = list(dict.fromkeys(args.bauds))
-            _run_duo(args)
-        else:
-            ser = open_port(args.port, args.baud, args.parity, args.stopbits)
-            eng = TestEngine(ser, seed=0)
-            res = eng.run_traffic_test("manual", args.pattern, args.size,
-                                       args.gap, args.duration,
-                                       timeout=args.timeout, collide=args.collide)
-            v, reasons = verdict(res, 0.0, 0.0)
-            res["lat"] = lat_stats(res.pop("latencies_ms"))
-            print(json.dumps(dict(res, verdict=v, reasons=reasons), indent=2))
-            ser.close()
+        _dispatch(args)
     except BaudNotSupported as exc:
         sys.exit(f"[baud] {exc}")
 

@@ -20,9 +20,14 @@ from .report import write_reports
 from .transport import Transport, open_port
 
 
-def battery_plan(profile: str, bauds: list[int],
-                 base_baud: int) -> list[tuple[str, str, dict[str, Any]]]:
-    """Retorna llista de (descripcio, tipus, kwargs)."""
+def battery_plan(profile: str, bauds: list[int], base_baud: int,
+                 tests: list[str] | None = None
+                 ) -> list[tuple[str, str, dict[str, Any]]]:
+    """Retorna llista de (descripcio, tipus, kwargs).
+
+    ``tests`` limita el pla a un subconjunt dels tests del nucli (en l'ordre
+    canonic); si es None, es corren tots dotze.
+    """
     d = dict(smoke=dict(short=5, med=8, long=10, idle=5),
              standard=dict(short=20, med=45, long=60, idle=30),
              soak=dict(short=60, med=300, long=1800, idle=120))[profile]
@@ -41,6 +46,9 @@ def battery_plan(profile: str, bauds: list[int],
         ("post_collision",    "ping",    dict()),
         ("ber_random_long",   "traffic", dict(pattern="random",  size=128, gap_ms=0,   duration_s=d["long"])),
     ]
+    if tests is not None:
+        want = set(tests)
+        core = [t for t in core if t[0] in want]
 
     plan = [(f"{name}@{base_baud}", kind, kw) for name, kind, kw in core]
     # barrido de bauds: subset representatiu a cada baud extra
@@ -149,10 +157,12 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
                 port=args.port, base_baud=args.baud, parity=args.parity,
                 stopbits=args.stopbits, profile=args.profile, seed=seed,
                 bauds=args.bauds, max_fer=args.max_fer, max_p99_ms=args.max_p99,
+                tests=getattr(args, "tests", None),
                 platform=platform.platform(), python=sys.version.split()[0],
                 pyserial=pyserial_version, operator_notes=args.notes or "")
 
-    plan = battery_plan(args.profile, args.bauds, args.baud)
+    plan = battery_plan(args.profile, args.bauds, args.baud,
+                        tests=getattr(args, "tests", None))
     n_tests = sum(1 for _, k, _ in plan if k in ("traffic", "idle", "ping"))
 
     results = []

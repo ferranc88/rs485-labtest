@@ -20,6 +20,10 @@ import sys
 import time
 from typing import Any, Protocol
 
+from .catalog import describe
+
+_SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
 
 # ------------------------------------------------------------------ interficie
 class Monitor(Protocol):
@@ -104,7 +108,12 @@ class PlainMonitor:
                 "FALLIT (el slave no respon al nou baud); s'ometen els seus tests")
 
     def test_start(self, idx: int, n_tests: int, name: str, kind: str) -> None:
-        self._p(f"[{idx:>2}/{n_tests}] {name:<28}", end=" ")
+        d = describe(name)
+        title = f" · {d['icon']} {d['title']}" if d else ""
+        self._p(f"\n[{idx:>2}/{n_tests}] {name}{title}")
+        if d:
+            self._p(f"        què:     {d['what']}")
+            self._p(f"        per què: {d['why']}")
 
     def test_progress(self, res: dict[str, Any]) -> None: ...
 
@@ -113,7 +122,8 @@ class PlainMonitor:
         extra = f" | {', '.join(reasons)}" if reasons else ""
         lat = res.get("lat") or {}
         lati = f" p50={lat.get('p50')}ms p99={lat.get('p99')}ms" if lat else ""
-        self._p(f"{res['verdict']:<4} tx={res.get('tx', 0)} ok={res.get('ok', 0)}{lati}{extra}")
+        self._p(f"        → {res['verdict']:<4} tx={res.get('tx', 0)} "
+                f"ok={res.get('ok', 0)}{lati}{extra}")
 
     def note(self, msg: str) -> None:
         self._p(msg)
@@ -127,6 +137,7 @@ class PlainMonitor:
 
 # ------------------------------------------------------------------ RichMonitor
 _VERDICT_STYLE = {"PASS": "bold green", "FAIL": "bold red", "INFO": "yellow"}
+_VERDICT_ICON = {"PASS": "✓", "FAIL": "✗", "INFO": "•"}
 
 
 class RichMonitor:
@@ -213,110 +224,154 @@ class RichMonitor:
             pass    # un frame perdut no ha de tombar la corrida
 
     def _render(self) -> Any:
+        from rich import box
         from rich.console import Group
         from rich.panel import Panel
 
         elapsed = time.monotonic() - self.t_start if self.t_start else 0.0
         done = len(self.rows)
-        bar = self._bar(done / self.n_tests if self.n_tests else 0.0, 24)
-        head = (f"[bold]RS-485 labtest v{self.version}[/]   "
-                f"label=[cyan]{self.meta.get('label', '?')}[/]  "
-                f"profile={self.meta.get('profile', '?')}  "
-                f"seed={self.meta.get('seed', '?')}\n"
-                f"{bar}  test {min(done + (self.cur is not None), self.n_tests)}/{self.n_tests}   "
-                f"[green]✓{self.n_pass}[/] [red]✗{self.n_fail}[/] [yellow]•{self.n_info}[/]   "
-                f"t={elapsed:5.1f}s")
-        header = Panel(head, border_style="blue", padding=(0, 1))
+        frac = done / self.n_tests if self.n_tests else 0.0
+        cur_n = min(done + (self.cur is not None), self.n_tests)
+        head = (
+            f"[bold bright_white]⚡ RS-485 labtest[/] [dim]v{self.version}[/]   "
+            f"[bright_white]{self.meta.get('label', '?')}[/]\n"
+            f"[dim]profile[/] {self.meta.get('profile', '?')}   "
+            f"[dim]seed[/] {self.meta.get('seed', '?')}   "
+            f"[dim]bauds[/] {self._bauds_str()}\n"
+            f"{self._bar(frac, 30)} [bold]{100 * frac:3.0f}%[/]  "
+            f"[dim]test[/] {cur_n}/{self.n_tests}   "
+            f"[green]✓ {self.n_pass}[/]  [red]✗ {self.n_fail}[/]  "
+            f"[yellow]• {self.n_info}[/]   [dim]⏱[/] {elapsed:5.1f}s")
+        header = Panel(head, box=box.HEAVY, border_style="bright_blue",
+                       padding=(0, 1))
 
-        group = [header, self._current_panel(), self._results_table()]
+        group: list[Any] = [header, self._current_panel(), self._results_table()]
         if self.notes:
-            group.append(Panel("\n".join(self.notes[-3:]),
-                                title="notes", border_style="grey37", padding=(0, 1)))
+            group.append(Panel("\n".join(self.notes[-3:]), title="[dim]notes[/]",
+                               box=box.ROUNDED, border_style="grey37",
+                               padding=(0, 1), title_align="left"))
+        group.append(self._legend())
         return Group(*group)
 
     def _current_panel(self) -> Any:
+        from rich import box
+        from rich.console import Group
         from rich.panel import Panel
         from rich.table import Table
 
         if self.cur is None:
-            return Panel("[grey50]esperant...[/]", title="test en curs",
-                         border_style="grey37", padding=(0, 1))
+            return Panel("[grey50]preparant la seguent prova…[/]",
+                         title="[dim]test en curs[/]", box=box.ROUNDED,
+                         border_style="grey37", padding=(0, 1), title_align="left")
 
         res = self.cur_res
         name, kind = self.cur["name"], self.cur["kind"]
+        info = describe(name)
         dur = res.get("duration_s")
         el = time.monotonic() - self.cur["t0"]
         frac = min(el / dur, 1.0) if dur else 0.0
-        prog = f"{self._bar(frac, 20)} {el:4.1f}s" + (f"/{dur:g}s" if dur else "")
+        spin = _SPINNER[int(time.monotonic() * 12) % len(_SPINNER)]
+        prog = (f"[bright_cyan]{spin}[/] {self._bar(frac, 22)} "
+                f"{el:4.1f}s" + (f"[dim]/{dur:g}s[/]" if dur else ""))
+
+        blocks: list[Any] = []
+        if info:
+            blocks.append(f"[italic]{info['what']}[/]")
+            blocks.append(f"[dim]↳ per què:[/] [grey70]{info['why']}[/]")
 
         t = Table.grid(padding=(0, 2))
-        t.add_column(justify="left")
+        t.add_column(justify="right", style="dim")
         t.add_column(justify="left")
 
         if res.get("idle_test"):
             raw = res.get("raw_bytes", 0)
             style = "bold red" if raw else "bold green"
-            t.add_row("bus en repos", f"[{style}]{raw} B rebuts[/] (ha de ser 0)")
-            t.add_row("progres", prog)
+            mark = "✗" if raw else "✓"
+            t.add_row("bus en repòs", f"[{style}]{mark} {raw} B rebuts[/] "
+                                      f"[dim](ha de ser 0)[/]")
+            t.add_row("progrés", prog)
             spark = ""
         else:
             tx, ok = res.get("tx", 0), res.get("ok", 0)
             fer = _fer(res)
-            fer_style = "green" if fer == 0 else "red"
+            fer_style = "green" if fer == 0 else "bold red"
             lat = res.get("latencies_ms") or []
             p50 = f"{_pct(lat, .5):.2f}" if lat else "-"
             p99 = f"{_pct(lat, .99):.2f}" if lat else "-"
             t.add_row("tx / ok", f"{tx} / [green]{ok}[/]")
             t.add_row("errors",
-                      f"crc=[red]{res.get('crc_err', 0)}[/] "
-                      f"mism=[red]{res.get('mismatch', 0)}[/] "
-                      f"seq=[red]{res.get('seq_err', 0)}[/] "
-                      f"to=[red]{res.get('timeout', 0)}[/]  "
-                      f"junk=[red]{res.get('junk_bytes', 0)}[/]B")
+                      f"crc [red]{res.get('crc_err', 0)}[/]  "
+                      f"mism [red]{res.get('mismatch', 0)}[/]  "
+                      f"seq [red]{res.get('seq_err', 0)}[/]  "
+                      f"to [red]{res.get('timeout', 0)}[/]  "
+                      f"junk [red]{res.get('junk_bytes', 0)}[/]B")
             t.add_row("FER", f"[{fer_style}]{100 * fer:.4f} %[/]")
-            t.add_row("latencia", f"p50=[cyan]{p50}[/]ms  p99=[cyan]{p99}[/]ms")
-            t.add_row("progres", prog)
+            t.add_row("latència", f"p50 [cyan]{p50}[/] ms   p99 [cyan]{p99}[/] ms")
+            t.add_row("progrés", prog)
             spark = sparkline(lat)
 
-        title = f"test en curs: [bold]{name}[/]  ([magenta]{kind}[/])"
-        body: Any = t
+        blocks.append(t)
         if spark:
-            from rich.console import Group
-            body = Group(t, f"[cyan]{spark}[/]")
-        return Panel(body, title=title, border_style="cyan", padding=(0, 1))
+            blocks.append(f"[dim]latències[/] [cyan]{spark}[/]")
+
+        icon = f"{info['icon']} " if info else ""
+        human = f" — [bright_white]{info['title']}[/]" if info else ""
+        title = f"[bold cyan]▶ {icon}{name}[/]{human}  [dim]({kind})[/]"
+        return Panel(Group(*blocks), title=title, box=box.ROUNDED,
+                     border_style="cyan", padding=(0, 1), title_align="left")
 
     def _results_table(self) -> Any:
+        from rich import box
         from rich.table import Table
 
-        t = Table(expand=True, border_style="grey37", pad_edge=False)
+        t = Table(expand=True, box=box.SIMPLE_HEAD, border_style="grey37",
+                  pad_edge=False, header_style="bold dim")
         t.add_column("#", justify="right", width=3, style="grey50")
         t.add_column("test", ratio=3)
         t.add_column("baud", justify="right")
         t.add_column("tx", justify="right")
         t.add_column("ok", justify="right")
         t.add_column("junk", justify="right")
-        t.add_column("p50/p99", justify="right")
+        t.add_column("p50/p99 ms", justify="right")
         t.add_column("veredicte", justify="center")
 
         visible = self.rows[-12:]
         first = len(self.rows) - len(visible) + 1
         if first > 1:
-            t.add_row("…", f"[grey50]{first - 1} tests anteriors[/]", "", "", "", "", "", "")
+            t.add_row("…", f"[grey50]{first - 1} tests anteriors[/]",
+                      "", "", "", "", "", "")
         for i, r in enumerate(visible, first):
             lat = r.get("lat") or {}
-            latstr = f"{lat.get('p50', '-')}/{lat.get('p99', '-')}" if lat else "-"
+            latstr = f"{lat.get('p50', '-')}/{lat.get('p99', '-')}" if lat else "[dim]-[/]"
             v = r.get("verdict", "?")
             junk = r.get("junk_bytes", r.get("raw_bytes", 0))
-            t.add_row(str(i), r.get("name", "?"), str(r.get("baud", "-")),
-                      str(r.get("tx", 0)), str(r.get("ok", 0)), str(junk), latstr,
-                      f"[{_VERDICT_STYLE.get(v, 'white')}]{v}[/]")
+            junk_txt = f"[red]{junk}[/]" if junk else "0"
+            info = describe(r.get("name", ""))
+            label = (f"{info['icon']} " if info else "") + r.get("name", "?")
+            t.add_row(str(i), label, str(r.get("baud", "-")),
+                      str(r.get("tx", 0)), str(r.get("ok", 0)), junk_txt, latstr,
+                      f"[{_VERDICT_STYLE.get(v, 'white')}]{_VERDICT_ICON.get(v, '')} {v}[/]")
         return t
+
+    def _legend(self) -> Any:
+        return (
+            "[dim]  llegenda:[/] [green]✓ PASS[/]  [red]✗ FAIL[/]  "
+            "[yellow]• INFO[/]   "
+            "[dim]FER=frame error rate · junk=bytes fora de trama · "
+            "Ctrl-C atura i desa informe parcial[/]")
+
+    def _bauds_str(self) -> str:
+        base = self.meta.get("base_baud", "?")
+        extra = self.meta.get("bauds") or []
+        return str(base) + ("  +[" + " ".join(map(str, extra)) + "]" if extra else "")
 
     @staticmethod
     def _bar(frac: float, width: int) -> str:
         frac = max(0.0, min(1.0, frac))
-        full = int(frac * width)
-        return "[green]" + "█" * full + "[/][grey37]" + "─" * (width - full) + "[/]"
+        full = int(round(frac * width))
+        color = "green" if frac >= 0.999 else "bright_cyan"
+        return (f"[{color}]" + "█" * full + "[/][grey30]"
+                + "░" * (width - full) + "[/]")
 
 
 # ------------------------------------------------------------------- seleccio

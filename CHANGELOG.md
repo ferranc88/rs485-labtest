@@ -9,6 +9,16 @@ La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
 ## [Unreleased]
 
 ### Added
+- **Assistent interactiu** (`rs485-labtest wizard`): pregunta mode, ports
+  (amb detecció automàtica via `serial.tools.list_ports`), bauds, quins
+  tests, etiqueta i criteris, ensenya un resum i llança. Lògica de
+  construcció i parseig separades i testejades.
+- **Descripció de cada test en directe** (què fa i per què), tant a la TUI
+  com en mode pla, a partir d'un catàleg únic (`catalog.py`).
+- **Selecció de tests** amb `--tests` a `battery`/`duo` (per defecte, tots);
+  validació de noms amb missatge clar.
+- **TUI més polida**: capçalera amb barra de progrés i %, panell del test en
+  curs amb descripció, spinner, icones per test i veredicte, i llegenda.
 - **Suport explícit a baud rates alts i no estàndard** (p.ex. 307200): ja
   s'acceptaven, però ara si l'adaptador no pot amb un baud es llença
   `BaudNotSupported` amb el valor i pistes, en lloc d'un traceback; dins d'un

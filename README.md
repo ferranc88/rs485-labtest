@@ -80,14 +80,39 @@ mostrar en directe **no afecta les latències mesurades**: el refresc es
 dispara sempre *després* de cronometrar cada RTT, mai durant, i està escanyat
 a ~5 refrescos/s.
 
+## Assistent interactiu
+
+Si no vols recordar flags, llança l'assistent i respon les preguntes (mode,
+ports —amb detecció automàtica—, bauds, quins tests, etiqueta, criteris…):
+
+```bash
+rs485-labtest wizard
+```
+
+Munta la mateixa comanda que faries a mà i, després d'un resum, la llança.
+
 ## Modes
 
 | Mode | Funcio |
 |---|---|
+| `wizard` | assistent interactiu: pregunta i llança |
 | `slave` | escolta i fa eco; obeeix el canvi de baud remot (CMD_BAUD) |
 | `master` | test individual manual amb parametres lliures |
 | `battery` | bateria automatitzada de 12 tests + informes |
 | `duo` | arrenca el `slave` com a subproces i corre la `battery` des d'un sol PC |
+
+Cada test s'explica pel camí (què fa i per què) tant a la TUI com en mode pla.
+Pots triar un subconjunt amb `--tests` (per defecte, tots):
+
+```bash
+rs485-labtest duo --port ... --slave-port ... \
+    --tests sanity idle_monitor failsafe_paused
+```
+
+Tests disponibles: `sanity`, `turnaround_gap0`, `min_frames`, `pattern_0x55`,
+`pattern_0x00_DC`, `pattern_0xFF_DC`, `saturation_250B`, `failsafe_paused`,
+`idle_monitor`, `collision_blind`, `post_collision`, `ber_random_long`
+(detall a [docs/TESTPLAN.md](docs/TESTPLAN.md)).
 
 ## Flags principals (`battery` / `duo`)
 
@@ -102,6 +127,7 @@ a ~5 refrescos/s.
 | `--max-fer` | `0.0` | llindar de Frame Error Rate (0 = cap error tolerat) |
 | `--max-p99` | `0.0` | llindar p99 de latencia en ms (0 = sense llindar) |
 | `--live` | `auto` | feedback en directe: `auto` / `rich` (TUI) / `plain` |
+| `--tests` | tots | subconjunt de tests del nucli a córrer (noms de la llista) |
 
 Els criteris per defecte (FER = 0, junk = 0) son intencionals: aixo es una
 eina de **qualificacio**, no de monitoritzacio.
