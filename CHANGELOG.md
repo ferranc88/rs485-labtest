@@ -8,6 +8,14 @@ La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
 
 ## [Unreleased]
 
+### Fixed
+- **Fals timeout amb trames grans a baud baix**: el timeout per intercanvi
+  era fix (0,5 s) i una trama de 250 B a 9600 bps triga ~0,54 s d'anada i
+  tornada, cosa que donava FER 100% fals a `failsafe_paused@9600`. Ara el
+  timeout **escala amb el baud i la mida de trama** (`min_exchange_timeout`),
+  de manera que mai és més curt que el temps físic de la trama. No afecta els
+  casos ràpids (a 307200 es manté el 0,5 s).
+
 ### Added
 - **Test nou `baud_offset` (marge de tolerància de baud)**: el master es
   desplaça ±1/2/3% respecte del slave i es mesura el FER a cada desajust.

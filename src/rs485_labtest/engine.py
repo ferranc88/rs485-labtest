@@ -8,10 +8,23 @@ import time
 from typing import Any, Callable
 
 from .patterns import make_payload
-from .protocol import T_ACK, T_CMD_BAUD, T_DATA, FrameReader, build_frame
+from .protocol import HDR_LEN, T_ACK, T_CMD_BAUD, T_DATA, FrameReader, build_frame
 from .transport import BaudNotSupported, Transport, WriteTimeout
 
 ProgressCB = Callable[["dict[str, Any]"], None]
+
+
+def min_exchange_timeout(baud: int, size: int, base: float) -> float:
+    """Timeout minim per a un intercanvi, mai mes curt que el temps fisic.
+
+    Una trama gran a baud baix pot trigar mes a anar i tornar que el timeout
+    fix: a 9600 bps una trama de 250 B fa ~0,54 s d'anada i tornada, per sobre
+    del 0,5 s per defecte, i donaria un FALS timeout. Escalem el timeout amb el
+    temps de transmissio (8N1 = 10 bits/byte, anada + tornada) amb marge.
+    """
+    frame_bits = (HDR_LEN + size + 2) * 10        # 8N1
+    rtt_s = frame_bits / baud * 2.0               # master TX + eco del slave
+    return max(base, rtt_s * 1.5 + 0.05)
 
 
 class TestEngine:
@@ -101,6 +114,8 @@ class TestEngine:
             duration_s=duration_s, baud=self.ser.baudrate, collide=collide,
             tx=0, ok=0, crc_err=0, mismatch=0, seq_err=0, timeout=0,
             junk_bytes=0, latencies_ms=[])
+        # el timeout no pot ser mes curt que el temps fisic de la trama
+        timeout = min_exchange_timeout(self.ser.baudrate, size, timeout)
         t_end = time.monotonic() + duration_s
         n = 0
         while time.monotonic() < t_end:

@@ -8,9 +8,29 @@ import pytest
 import rs485_labtest.transport as transport
 from fakes import FakeTransport, PerfectDUT
 from rs485_labtest.battery import battery_plan
-from rs485_labtest.engine import TestEngine
-from rs485_labtest.protocol import T_CMD_BAUD, FrameReader
+from rs485_labtest.engine import TestEngine, min_exchange_timeout
+from rs485_labtest.protocol import HDR_LEN, T_CMD_BAUD, FrameReader
 from rs485_labtest.transport import BaudNotSupported, open_port
+
+
+# --------------------------------------- timeout escala amb baud i mida de trama
+def test_min_exchange_timeout_keeps_base_for_small_fast_frames():
+    # 64 B a 307200: el temps fisic es negligible, es mante el base (0.5)
+    assert min_exchange_timeout(307200, 64, 0.5) == 0.5
+
+
+def test_min_exchange_timeout_grows_for_big_frames_at_low_baud():
+    # 250 B a 9600: anada+tornada ~0.54 s > 0.5 s -> el timeout ha de creixer
+    t = min_exchange_timeout(9600, 250, 0.5)
+    frame_bits = (HDR_LEN + 250 + 2) * 10
+    rtt = frame_bits / 9600 * 2.0
+    assert t > rtt                      # deixa marge per sobre del temps fisic
+    assert t > 0.5                      # i supera el base fix
+
+
+def test_failsafe_paused_at_9600_would_not_false_timeout():
+    # el cas real del camp: 250 B a 9600 necessita mes de 0.5 s
+    assert min_exchange_timeout(9600, 250, 0.5) >= 0.54 * 1.5
 
 
 # --------------------------------------------------- el valor passa pel pipeline

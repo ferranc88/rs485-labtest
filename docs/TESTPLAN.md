@@ -58,6 +58,14 @@ aquest test.
 Turnaround **no determinista**: auto-baud, buffers d'emmagatzematge i
 reenviament o timers interns del convertidor.
 
+### Timeouts NOMES a baud baix amb trames grans
+Si veus timeouts concentrats en tests de trama gran (`saturation_250B`,
+`failsafe_paused`) **només a baud baix** (p.ex. 9600) i el link va fi a la
+resta, no és el DUT: és que la trama triga a anar i tornar més que el timeout.
+L'eina ja escala el timeout amb el baud i la mida (`min_exchange_timeout`),
+però si toques els timeouts a mà, recorda que a 9600 una trama de 250 B són
+~0,54 s d'anada i tornada.
+
 ### `baud_offset`: com llegir el marge
 Un link UART asincron tolera **~2% de desajust de baud acumulat** entre
 emissor i receptor (limit teoric ~3,3% amb mostreig 16x). Cada re-clock pel
