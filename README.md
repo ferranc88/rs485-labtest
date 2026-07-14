@@ -172,6 +172,7 @@ diferencial a l'oscil·loscopi.
 
 ## Documentacio
 
+- [docs/GUIA_LINUX.md](docs/GUIA_LINUX.md) — passos de bash: instal·lar, actualitzar i executar al PC Linux
 - [docs/SETUP.md](docs/SETUP.md) — muntatge del banc, `latency_timer`, permisos, noms by-id
 - [docs/TESTPLAN.md](docs/TESTPLAN.md) — els 13 tests: que estressa cadascun i que significa un FAIL
 - [docs/NDR6_MATRIX.md](docs/NDR6_MATRIX.md) — matriu de mode comu per al cas NDR6
