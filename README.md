@@ -122,24 +122,33 @@ master es desplaça ±1/2/3% (el slave no es toca) i s'apunta on comença el
 FER. ±1% ha de passar (`--baud-margin`); ±2/3% són caracterització — clau
 per a convertidors que re-clocken el senyal, com el NDR6.
 
-### 4 fils (full-duplex)
+## Interfícies suportades
 
-Amb `--wires 4` la bateria s'adapta al cablejat de 4 fils (un parell per
-sentit, creuat):
+Trieu què esteu provant amb `--interface` (o responent la primera pregunta de
+l'assistent). Determina **quins tests apliquen** i **com s'interpreten els
+errors** a l'informe:
+
+| `--interface` | Què és | Duplex | Tests propis |
+|---|---|---|---|
+| `rs485-half` (per defecte) | un parell diferencial compartit | half | `collision_blind`, `post_collision` |
+| `rs485-full` | dos parells diferencials creuats | full | `fullduplex_load`, `fullduplex_sat250` |
+| `rs422` | com el 485 de 4 fils, un sol emissor sempre actiu | full | idem |
+| `rs232` | single-ended (TX/RX/massa), punt a punt | full | idem |
 
 ```bash
-rs485-labtest duo --port ... --slave-port ... --wires 4
+rs485-labtest duo --port ... --slave-port ... --interface rs422
 ```
 
-- **Treu** `collision_blind` i `post_collision`: en punt a punt no hi ha bus
-  compartit on col·lisionar.
-- **Afegeix** `fullduplex_load` i `fullduplex_sat250`: carreguen **les dues
-  direccions alhora** (finestra de trames en vol, sense esperar cada eco) —
-  impossible en 2 fils, i on es veu si el convertidor ofega un sentit quan
-  l'altre va carregat.
-- El failsafe (`idle_monitor`, `failsafe_paused`) segueix aplicant a cada parell.
+- En **half-duplex** hi ha bus compartit → apliquen els tests de col·lisió i el
+  turnaround és crític.
+- En **full-duplex** (485-full, 422, 232) no hi ha contesa en punt a punt → es
+  treuen els tests de col·lisió i s'afegeixen els de **càrrega simultània**
+  (finestra de trames en vol, impossible en half-duplex).
+- La **guia d'interpretació de l'informe s'adapta**: en RS-232 no es parla de
+  bias de failsafe ni de diferencial A-B (no existeixen); en RS-422 s'avisa que
+  l'emissor va sempre habilitat.
 
-Cablejat i terminació a [docs/SETUP.md](docs/SETUP.md).
+Cablejat i terminació de cada cas a [docs/SETUP.md](docs/SETUP.md).
 
 ## Flags principals (`battery` / `duo`)
 
@@ -155,7 +164,7 @@ Cablejat i terminació a [docs/SETUP.md](docs/SETUP.md).
 | `--max-p99` | `0.0` | llindar p99 de latencia en ms (0 = sense llindar) |
 | `--live` | `auto` | feedback en directe: `auto` / `rich` (TUI) / `plain` |
 | `--tests` | tots | subconjunt de tests del nucli a córrer (noms de la llista) |
-| `--wires` | `2` | cablejat: `2` half-duplex (parell compartit) o `4` full-duplex |
+| `--interface` | `rs485-half` | què es prova: `rs485-half` · `rs485-full` · `rs422` · `rs232` |
 
 Els criteris per defecte (FER = 0, junk = 0) son intencionals: aixo es una
 eina de **qualificacio**, no de monitoritzacio.

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from .catalog import TEST_ORDER, describe
+from .interfaces import DEFAULT_INTERFACE, INTERFACES, interface_for_wires
 
 _MODES = ("duo", "battery", "slave")
 _LIVE = ("auto", "rich", "plain")
@@ -100,6 +101,16 @@ def parse_test_selection(text: str) -> list[str]:
     return [n for n in TEST_ORDER if n in picked]
 
 
+def resolve_interface(answers: dict[str, Any]) -> str:
+    """Interficie de les respostes, migrant els presets antics amb ``wires``."""
+    iface = answers.get("interface")
+    if iface in INTERFACES:
+        return str(iface)
+    if answers.get("wires") is not None:          # preset desat abans de --interface
+        return interface_for_wires(int(answers["wires"]))
+    return DEFAULT_INTERFACE
+
+
 def build_namespace(answers: dict[str, Any]) -> tuple[str, argparse.Namespace]:
     """Construeix (mode, Namespace) a partir de les respostes de l'assistent."""
     mode = answers["mode"]
@@ -110,7 +121,8 @@ def build_namespace(answers: dict[str, Any]) -> tuple[str, argparse.Namespace]:
         parity=answers.get("parity", "N"),
         stopbits=float(answers.get("stopbits", 1)),
         profile=answers.get("profile", "standard"),
-        wires=int(answers.get("wires", 2)),
+        interface=resolve_interface(answers),
+        wires=None,                    # ja resolt a interface; l'alias no aplica
         bauds=list(answers.get("bauds", []) or []),
         tests=answers.get("tests") or None,
         label=answers.get("label", ""),
@@ -185,6 +197,32 @@ def _explain(console: Any, *lines: str) -> None:  # pragma: no cover - nomes UI
         console.print(f"[dim]💬 {line}[/]")
 
 
+def _ask_interface(console: Any) -> str:  # pragma: no cover - interactiu
+    """Primera pregunta de totes: que anem a testejar."""
+    from rich.prompt import Prompt
+
+    console.print()
+    console.print("[bold bright_white]Què anem a testejar?[/]")
+    keys = list(INTERFACES)
+    for i, key in enumerate(keys, 1):
+        info = INTERFACES[key]
+        console.print(f"  [cyan]{i}[/] {info['icon']} [bold]{key}[/] — "
+                      f"{info['title']}")
+        console.print(f"      [dim]{info['what']}[/]")
+        console.print(f"      [dim]cablejat: {info['wiring']}[/]")
+    _explain(console,
+             "Determina quins tests apliquen (en half-duplex hi ha colisions; "
+             "en full-duplex, carrega simultania) i com s'interpreten els "
+             "errors a l'informe.")
+    while True:
+        raw = Prompt.ask("Interfície (número o nom)", default=DEFAULT_INTERFACE)
+        if raw.isdigit() and 1 <= int(raw) <= len(keys):
+            return keys[int(raw) - 1]
+        if raw in INTERFACES:
+            return raw
+        console.print("[red]no existeix[/]")
+
+
 def _offer_presets(console: Any) -> dict[str, Any] | None:  # pragma: no cover
     """Si hi ha configuracions desades, ofereix-les. Retorna les respostes
     del preset triat, o None si l'operador vol una configuracio nova."""
@@ -244,6 +282,8 @@ def run_wizard() -> tuple[str, argparse.Namespace]:  # pragma: no cover - intera
 
     answers: dict[str, Any] = {}
 
+    answers["interface"] = _ask_interface(console)
+
     _explain(console,
              "duo = tot des d'aquest PC (arrenca el slave sol i corre la bateria).",
              "battery = nomes el master (el slave ja corre en un altre PC).",
@@ -283,15 +323,6 @@ def run_wizard() -> tuple[str, argparse.Namespace]:  # pragma: no cover - intera
             "Retard artificial abans de l'eco (µs)", default=0)
         _maybe_save(console, answers)
         return build_namespace(answers)
-
-    _explain(console,
-             "2 fils = half-duplex: un unic parell compartit; els dos extrems "
-             "s'alternen (el cas classic de RS-485).",
-             "4 fils = full-duplex: un parell per sentit; es poden transmetre "
-             "les dues direccions alhora. Treu els tests de colisio (no hi ha "
-             "bus compartit) i afegeix els de carrega simultania.")
-    answers["wires"] = int(Prompt.ask("Cablejat del link", choices=["2", "4"],
-                                      default="2"))
 
     _explain(console,
              "A cada baud extra es repeteix un subconjunt representatiu de "
@@ -361,8 +392,9 @@ def _print_summary(console: Any, mode: str, ns: argparse.Namespace) -> None:  # 
         lines.append(f"[bold]slave[/] {ns.slave_port}")
     lines.append(f"[bold]baud[/] {ns.baud}"
                  + (f"  +{ns.bauds}" if ns.bauds else ""))
-    lines.append(f"[bold]cablejat[/] {ns.wires} fils "
-                 f"({'full' if ns.wires == 4 else 'half'}-duplex)")
+    info = INTERFACES.get(ns.interface)
+    lines.insert(0, f"[bold]interfície[/] {info['icon'] if info else ''} "
+                    f"{info['title'] if info else ns.interface}")
     lines.append(f"[bold]perfil[/] {ns.profile}")
     lines.append("[bold]tests[/] " + ("tots" if ns.tests is None
                                         else ", ".join(ns.tests)))

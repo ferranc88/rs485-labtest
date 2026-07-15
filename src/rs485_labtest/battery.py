@@ -13,7 +13,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import __version__
+from .catalog import HALF_DUPLEX_ONLY
 from .engine import TestEngine
+from .interfaces import DEFAULT_INTERFACE, interface_duplex
 from .monitor import Monitor, make_monitor
 from .protocol import HDR_LEN
 from .report import write_reports
@@ -25,17 +27,18 @@ BAUD_OFFSETS_PCT = (1.0, -1.0, 2.0, -2.0, 3.0, -3.0)
 
 
 def battery_plan(profile: str, bauds: list[int], base_baud: int,
-                 tests: list[str] | None = None, wires: int = 2
+                 tests: list[str] | None = None, duplex: str = "half"
                  ) -> list[tuple[str, str, dict[str, Any]]]:
     """Retorna llista de (descripcio, tipus, kwargs).
 
     ``tests`` limita el pla a un subconjunt dels tests del nucli (en l'ordre
     canonic); si es None, es corren tots.
 
-    ``wires`` es el cablejat: 2 (half-duplex, un parell compartit) o 4
-    (full-duplex, un parell per sentit). En 4 fils no hi ha bus compartit, aixi
-    que els tests de colisio no apliquen i s'hi afegeixen els de carrega
-    simultania en les dues direccions.
+    ``duplex`` es l'unic que fa variar el pla:
+
+    - ``half`` (RS-485 2 fils): bus compartit -> tests de colisio i turnaround.
+    - ``full`` (RS-485 4 fils, RS-422, RS-232): un cami per sentit -> no hi ha
+      contesa, i s'hi poden fer els tests de carrega simultania.
     """
     d = dict(smoke=dict(short=5, med=8, long=10, idle=5),
              standard=dict(short=20, med=45, long=60, idle=30),
@@ -55,12 +58,11 @@ def battery_plan(profile: str, bauds: list[int], base_baud: int,
         ("post_collision",    "ping",    dict()),
         ("ber_random_long",   "traffic", dict(pattern="random",  size=128, gap_ms=0,   duration_s=d["long"])),
     ]
-    if wires == 4:
-        # 4 fils: cada sentit te el seu parell, no hi ha bus compartit ->
-        # les colisions no existeixen en punt a punt i els seus tests no apliquen
-        core = [t for t in core
-                if t[0] not in ("collision_blind", "post_collision")]
-        # ...pero s'hi poden fer proves que en 2 fils serien una colisio:
+    if duplex == "full":
+        # cada sentit te el seu cami: no hi ha bus compartit, aixi que en punt
+        # a punt les colisions no existeixen i els seus tests no apliquen
+        core = [t for t in core if t[0] not in HALF_DUPLEX_ONLY]
+        # ...pero s'hi poden fer proves que en half serien una colisio:
         # les dues direccions carregades alhora
         core += [
             ("fullduplex_load",   "fullduplex", dict(pattern="random", size=64,  window=8, duration_s=d["med"])),
@@ -180,6 +182,9 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
     label = args.label or "unlabeled"
     base = os.path.join(outdir, f"rs485_{label}_{stamp}")
 
+    iface = getattr(args, "interface", DEFAULT_INTERFACE)
+    duplex = interface_duplex(iface)
+
     seed = args.seed if args.seed is not None else random.randrange(2**31)
     ser = transport if transport is not None else open_port(
         args.port, args.baud, args.parity, args.stopbits)
@@ -198,13 +203,12 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
                 bauds=args.bauds, max_fer=args.max_fer, max_p99_ms=args.max_p99,
                 tests=getattr(args, "tests", None),
                 baud_margin=getattr(args, "baud_margin", 1.0),
-                wires=getattr(args, "wires", 2),
+                interface=iface, duplex=duplex,
                 platform=platform.platform(), python=sys.version.split()[0],
                 pyserial=pyserial_version, operator_notes=args.notes or "")
 
     plan = battery_plan(args.profile, args.bauds, args.baud,
-                        tests=getattr(args, "tests", None),
-                        wires=getattr(args, "wires", 2))
+                        tests=getattr(args, "tests", None), duplex=duplex)
     n_tests = sum(1 for _, k, _ in plan
                   if k in ("traffic", "idle", "ping", "offset", "fullduplex"))
 

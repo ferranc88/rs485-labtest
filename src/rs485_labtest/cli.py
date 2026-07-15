@@ -11,8 +11,14 @@ import time
 
 from . import __version__
 from .battery import lat_stats, run_battery, verdict
-from .catalog import ONLY_2WIRE, ONLY_4WIRE, TEST_ORDER, unknown_tests
+from .catalog import FULL_DUPLEX_ONLY, HALF_DUPLEX_ONLY, TEST_ORDER, unknown_tests
 from .engine import TestEngine
+from .interfaces import (
+    DEFAULT_INTERFACE,
+    INTERFACES,
+    interface_duplex,
+    interface_for_wires,
+)
 from .slave import run_slave
 from .transport import BaudNotSupported, open_port
 
@@ -46,11 +52,13 @@ def _common(p: argparse.ArgumentParser) -> None:
 
 def _battery_opts(p: argparse.ArgumentParser) -> None:
     """Opcions comunes de battery i duo."""
-    p.add_argument("--wires", type=int, choices=[2, 4], default=2,
-                   help="cablejat del link: 2 = half-duplex (un parell "
-                        "compartit, per defecte); 4 = full-duplex (un parell "
-                        "per sentit): treu els tests de colisio i afegeix els "
-                        "de carrega simultania")
+    p.add_argument("--interface", choices=list(INTERFACES), default=DEFAULT_INTERFACE,
+                   help="interficie sota prova. Determina el pla (half-duplex "
+                        "-> colisions; full-duplex -> carrega simultania) i la "
+                        "guia d'interpretacio de l'informe")
+    p.add_argument("--wires", type=int, choices=[2, 4], default=None,
+                   help="alias antic de --interface (2 = rs485-half, "
+                        "4 = rs485-full)")
     p.add_argument("--profile", choices=["smoke", "standard", "soak"], default="standard")
     p.add_argument("--bauds", type=int, nargs="*", default=[],
                    help="bauds addicionals per al barrido (canvi remot al slave); "
@@ -139,6 +147,12 @@ def _run_duo(args: argparse.Namespace) -> None:
         log.info("[duo] slave aturat")
 
 
+def _resolve_interface(args: argparse.Namespace) -> None:
+    """``--wires`` (alias antic) mana nomes si s'ha donat explicitament."""
+    if getattr(args, "wires", None) is not None:
+        args.interface = interface_for_wires(args.wires)
+
+
 def _validate_tests(args: argparse.Namespace) -> None:
     tests = getattr(args, "tests", None)
     if not tests:
@@ -147,12 +161,14 @@ def _validate_tests(args: argparse.Namespace) -> None:
     if bad:
         sys.exit(f"[tests] noms desconeguts: {', '.join(bad)}\n"
                  f"  valids: {', '.join(TEST_ORDER)}")
-    wires = getattr(args, "wires", 2)
-    wrong = sorted(set(tests) & (ONLY_4WIRE if wires == 2 else ONLY_2WIRE))
+    iface = getattr(args, "interface", DEFAULT_INTERFACE)
+    duplex = interface_duplex(iface)
+    wrong = sorted(set(tests) &
+                   (FULL_DUPLEX_ONLY if duplex == "half" else HALF_DUPLEX_ONLY))
     if wrong:
-        need = 4 if wires == 2 else 2
-        sys.exit(f"[tests] {', '.join(wrong)} nomes te sentit amb cablejat de "
-                 f"{need} fils; has demanat --wires {wires}")
+        need = "full-duplex" if duplex == "half" else "half-duplex"
+        sys.exit(f"[tests] {', '.join(wrong)} nomes te sentit en {need}; "
+                 f"has demanat --interface {iface} ({duplex}-duplex)")
 
 
 def _dispatch(args: argparse.Namespace) -> None:
@@ -161,10 +177,12 @@ def _dispatch(args: argparse.Namespace) -> None:
                   turnaround_us=args.turnaround_us)
     elif args.mode == "battery":
         args.bauds = list(dict.fromkeys(args.bauds))   # dedupe, conserva ordre
+        _resolve_interface(args)
         _validate_tests(args)
         run_battery(args)
     elif args.mode == "duo":
         args.bauds = list(dict.fromkeys(args.bauds))
+        _resolve_interface(args)
         _validate_tests(args)
         _run_duo(args)
     else:

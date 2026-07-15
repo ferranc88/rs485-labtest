@@ -6,25 +6,32 @@ import csv
 import json
 from typing import Any
 
+from .interfaces import DEFAULT_INTERFACE, describe_interface, interface_hints
+
 
 def write_reports(base: str, meta: dict[str, Any], results: list[dict[str, Any]],
                   lat_rows: list[tuple[str, int, float]]) -> None:
-    """Genera ``base.json``, ``base.md`` i ``base_latencies.csv``."""
-    with open(base + ".json", "w") as f:
+    """Genera ``base.json``, ``base.md`` i ``base_latencies.csv``.
+
+    Sempre en UTF-8: els informes es generen en un PC i es llegeixen en un
+    altre (el banc es Linux, l'escriptori pot ser Windows), i sense fixar-ho
+    la codificacio per defecte de cada plataforma els faria il.legibles.
+    """
+    with open(base + ".json", "w", encoding="utf-8") as f:
         json.dump(dict(meta=meta, results=results), f, indent=2)
 
-    with open(base + "_latencies.csv", "w", newline="") as f:
+    with open(base + "_latencies.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["test", "baud", "rtt_ms"])
         w.writerows(lat_rows)
 
     lines = [f"# Informe estres RS-485 - {meta['label']}", ""]
-    wires = meta.get("wires", 2)
+    iface_info = describe_interface(meta.get("interface", DEFAULT_INTERFACE))
     lines += [f"- **Data (UTC):** {meta['timestamp_utc']}",
+              f"- **Interficie:** {iface_info['title'] if iface_info else '?'}"
+              + (f" — {iface_info['wiring']}" if iface_info else ""),
               f"- **Port / baud base:** {meta['port']} @ {meta['base_baud']} "
               f"({meta['parity']},{meta['stopbits']})",
-              f"- **Cablejat:** {wires} fils "
-              f"({'full-duplex' if wires == 4 else 'half-duplex'})",
               f"- **Perfil:** {meta['profile']} | **Seed:** {meta['seed']} "
               f"| **Durada:** {meta['elapsed_s']} s"
               + (" | **INTERROMPUT**" if meta.get("aborted") else ""),
@@ -52,14 +59,15 @@ def write_reports(base: str, meta: dict[str, Any], results: list[dict[str, Any]]
     for r in fails:
         for reason in r["reasons"]:
             lines.append(f"- **{r['name']}**: {reason}")
-    lines += ["", "## Guia d'interpretacio", "",
-              "- **Junk amb bus en repos / idle_monitor FAIL** -> bias de failsafe insuficient; "
-              "mirar diferencial A-B en idle amb sonda (ha de ser > +200 mV).",
-              "- **Timeouts amb gap=0** -> el driver enable (auto-direccio) es queda actiu "
-              "massa temps i trepitja la resposta.",
-              "- **Mismatch (payload corrupte amb framing valid)** -> marge de bit degradat: "
-              "jitter, slew-rate o reflexions.",
-              "- **p99 >> p50** -> turnaround no determinista (auto-baud o buffers).",
-              "- **post_collision FAIL** -> latch-up: un transceptor es queda en TX.", ""]
-    with open(base + ".md", "w") as f:
+    # la guia depen de la interficie: parlar de bias o de diferencial A-B no
+    # te cap sentit en RS-232 (single-ended)
+    iface = meta.get("interface", DEFAULT_INTERFACE)
+    info = describe_interface(iface)
+    lines += ["", "## Guia d'interpretacio", ""]
+    if info:
+        lines.append(f"Interficie sota prova: **{info['title']}** — {info['what']}")
+        lines.append("")
+    lines += [f"- {h}" for h in interface_hints(iface)]
+    lines.append("")
+    with open(base + ".md", "w", encoding="utf-8") as f:
         f.write("\n".join(lines))

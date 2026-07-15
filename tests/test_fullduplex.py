@@ -9,17 +9,17 @@ from rs485_labtest.engine import TestEngine
 
 
 # ------------------------------------------------------------------ el pla
-def test_plan_2wire_has_collisions_and_no_fullduplex():
-    names = [n for n, _, _ in battery_plan("smoke", [], 115200, wires=2)]
+def test_plan_half_duplex_has_collisions_and_no_fullduplex():
+    names = [n for n, _, _ in battery_plan("smoke", [], 115200, duplex="half")]
     assert any(n.startswith("collision_blind") for n in names)
     assert any(n.startswith("post_collision") for n in names)
     assert not any(n.startswith("fullduplex") for n in names)
 
 
-def test_plan_4wire_drops_collisions_and_adds_fullduplex():
-    plan = battery_plan("smoke", [], 115200, wires=4)
+def test_plan_full_duplex_drops_collisions_and_adds_fullduplex():
+    plan = battery_plan("smoke", [], 115200, duplex="full")
     names = [n for n, _, _ in plan]
-    # en 4 fils no hi ha bus compartit: els tests de colisio no apliquen
+    # en full-duplex no hi ha bus compartit: els tests de colisio no apliquen
     assert not any(n.startswith("collision_blind") for n in names)
     assert not any(n.startswith("post_collision") for n in names)
     # i s'hi afegeixen els de carrega simultania
@@ -28,15 +28,15 @@ def test_plan_4wire_drops_collisions_and_adds_fullduplex():
     assert sum(1 for _, k, _ in plan if k == "fullduplex") == 2
 
 
-def test_plan_4wire_keeps_failsafe_and_idle_tests():
-    names = [n for n, _, _ in battery_plan("smoke", [], 115200, wires=4)]
+def test_plan_full_duplex_keeps_failsafe_and_idle_tests():
+    names = [n for n, _, _ in battery_plan("smoke", [], 115200, duplex="full")]
     # el failsafe segueix aplicant a cada parell
     assert any(n.startswith("idle_monitor") for n in names)
     assert any(n.startswith("failsafe_paused") for n in names)
 
 
-def test_plan_4wire_selection_of_fullduplex_only():
-    plan = battery_plan("smoke", [], 115200, tests=["fullduplex_load"], wires=4)
+def test_plan_full_duplex_selection_of_fullduplex_only():
+    plan = battery_plan("smoke", [], 115200, tests=["fullduplex_load"], duplex="full")
     assert [n for n, _, _ in plan] == ["fullduplex_load@115200"]
 
 
@@ -102,20 +102,15 @@ def test_fullduplex_timeout_budget_accounts_for_window():
 
 
 # ------------------------------------------------------------- validacio CLI
-def test_cli_rejects_fullduplex_test_on_2_wires():
+def test_cli_rejects_fullduplex_test_on_half_duplex():
     with pytest.raises(SystemExit) as ei:
-        main(["battery", "--port", "x", "--wires", "2",
+        main(["battery", "--port", "x", "--interface", "rs485-half",
               "--tests", "fullduplex_load"])
-    assert "4 fils" in str(ei.value)
+    assert "full-duplex" in str(ei.value)
 
 
-def test_cli_rejects_collision_test_on_4_wires():
+def test_cli_rejects_collision_test_on_full_duplex():
     with pytest.raises(SystemExit) as ei:
-        main(["battery", "--port", "x", "--wires", "4",
+        main(["battery", "--port", "x", "--interface", "rs232",
               "--tests", "collision_blind"])
-    assert "2 fils" in str(ei.value)
-
-
-def test_cli_wires_defaults_to_2():
-    from rs485_labtest.cli import build_parser
-    assert build_parser().parse_args(["battery", "--port", "x"]).wires == 2
+    assert "half-duplex" in str(ei.value)

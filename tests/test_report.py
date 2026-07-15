@@ -63,6 +63,16 @@ def test_csv_rows(tmp_path):
     assert len(rows) == 3
 
 
+def test_reports_are_utf8_on_every_platform(tmp_path):
+    # es generen en un PC i es llegeixen en un altre: sempre UTF-8
+    base = str(tmp_path / "out")
+    write_reports(base, _meta(label="Vcm±7V café"), _results(), _lat_rows())
+    md = (tmp_path / "out.md").read_text(encoding="utf-8")
+    assert "Vcm±7V café" in md
+    (tmp_path / "out.json").read_text(encoding="utf-8")
+    (tmp_path / "out_latencies.csv").read_text(encoding="utf-8")
+
+
 def test_markdown_content(tmp_path):
     base = str(tmp_path / "out")
     write_reports(base, _meta(), _results(), _lat_rows())

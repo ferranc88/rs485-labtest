@@ -29,9 +29,10 @@ TEST_ORDER: list[str] = [
     "baud_offset", "fullduplex_load", "fullduplex_sat250",
 ]
 
-# Tests que nomes tenen sentit amb un cablejat concret.
-ONLY_2WIRE: frozenset[str] = frozenset({"collision_blind", "post_collision"})
-ONLY_4WIRE: frozenset[str] = frozenset({"fullduplex_load", "fullduplex_sat250"})
+# Tests que nomes tenen sentit segons el duplex de la interficie.
+# half = bus compartit -> hi ha contesa; full = un cami per sentit -> no.
+HALF_DUPLEX_ONLY: frozenset[str] = frozenset({"collision_blind", "post_collision"})
+FULL_DUPLEX_ONLY: frozenset[str] = frozenset({"fullduplex_load", "fullduplex_sat250"})
 
 TEST_CATALOG: dict[str, TestInfo] = {
     "sanity": {

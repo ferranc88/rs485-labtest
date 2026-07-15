@@ -65,16 +65,18 @@ class PtyLink:
                 pass
 
 
-def test_duo_smoke_4wire_fullduplex_passes_on_virtual_link(tmp_path):
-    # Els ptys son full-duplex per naturalesa: banc ideal per al mode 4 fils.
-    # Valida que la carrega simultania (finestra de trames en vol) funciona
-    # end-to-end contra el slave real, sense colisions ni perdues.
+@pytest.mark.parametrize("interface", ["rs485-full", "rs422", "rs232"])
+def test_duo_smoke_fullduplex_interfaces_pass_on_virtual_link(tmp_path, interface):
+    # Els ptys son full-duplex per naturalesa: banc ideal per a aquestes
+    # interficies. Valida que la carrega simultania (finestra de trames en vol)
+    # funciona end-to-end contra el slave real, sense colisions ni perdues.
+    label = f"ci_{interface.replace('-', '_')}"
     link = PtyLink()
     try:
         proc = subprocess.run(
             [sys.executable, "-m", "rs485_labtest", "duo",
              "--port", link.port_a, "--slave-port", link.port_b,
-             "--wires", "4", "--profile", "smoke", "--label", "ci_fd",
+             "--interface", interface, "--profile", "smoke", "--label", label,
              "--seed", "7", "--outdir", str(tmp_path)],
             capture_output=True, text=True, timeout=300)
     finally:
@@ -82,11 +84,13 @@ def test_duo_smoke_4wire_fullduplex_passes_on_virtual_link(tmp_path):
 
     assert proc.returncode == 0, f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
 
-    with open(glob.glob(str(tmp_path / "rs485_ci_fd_*.json"))[0]) as f:
+    with open(glob.glob(str(tmp_path / f"rs485_{label}_*.json"))[0],
+              encoding="utf-8") as f:
         doc = json.load(f)
-    assert doc["meta"]["wires"] == 4
+    assert doc["meta"]["interface"] == interface
+    assert doc["meta"]["duplex"] == "full"
     names = [r["name"] for r in doc["results"]]
-    # en 4 fils: sense tests de colisio, amb els de carrega simultania
+    # full-duplex: sense tests de colisio, amb els de carrega simultania
     assert not any(n.startswith("collision_blind") for n in names)
     assert not any(n.startswith("post_collision") for n in names)
     fd = [r for r in doc["results"] if r["name"].startswith("fullduplex")]
@@ -94,6 +98,15 @@ def test_duo_smoke_4wire_fullduplex_passes_on_virtual_link(tmp_path):
     for r in fd:
         assert r["verdict"] == "PASS", r
         assert r["ok"] > 0 and r["junk_bytes"] == 0
+
+    # la guia de l'informe ha de parlar d'aquesta interficie, no d'una altra
+    md = open(glob.glob(str(tmp_path / f"rs485_{label}_*.md"))[0],
+              encoding="utf-8").read()
+    if interface == "rs232":
+        assert "single-ended" in md
+        assert "bias de failsafe insuficient" not in md
+    else:
+        assert "RS-485" in md or "RS-422" in md
 
 
 def test_duo_smoke_battery_passes_on_virtual_link(tmp_path):

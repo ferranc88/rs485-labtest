@@ -15,11 +15,11 @@ def test_order_and_catalog_are_consistent():
     assert len(TEST_ORDER) == 15
 
 
-def test_wire_specific_sets_are_known_and_disjoint():
-    from rs485_labtest.catalog import ONLY_2WIRE, ONLY_4WIRE
-    assert ONLY_2WIRE <= set(TEST_ORDER)
-    assert ONLY_4WIRE <= set(TEST_ORDER)
-    assert not (ONLY_2WIRE & ONLY_4WIRE)
+def test_duplex_specific_sets_are_known_and_disjoint():
+    from rs485_labtest.catalog import FULL_DUPLEX_ONLY, HALF_DUPLEX_ONLY
+    assert HALF_DUPLEX_ONLY <= set(TEST_ORDER)
+    assert FULL_DUPLEX_ONLY <= set(TEST_ORDER)
+    assert not (HALF_DUPLEX_ONLY & FULL_DUPLEX_ONLY)
 
 
 def test_every_entry_has_the_four_fields():

@@ -21,15 +21,21 @@ baud) es desplega en 6 subcorrides (±1/2/3%).
 | 12 | `ber_random_long` | trafic aleatori llarg | estimacio/cota de BER amb volum estadistic |
 | 13 | `baud_offset` | el master es desplaça ±1/2/3% del baud nominal (el slave no es toca) | el pressupost de tolerancia de baud del link sencer |
 
-Nomes amb `--wires 4` (full-duplex); en 2 fils no apliquen:
+Nomes amb una interficie **full-duplex** (`--interface rs485-full|rs422|rs232`);
+en half-duplex no apliquen:
 
 | # | Test | Que fa | Que estressa |
 |---|------|--------|--------------|
 | 14 | `fullduplex_load` | finestra de 8 trames de 64 B en vol, sense esperar l'eco | les dues direccions actives alhora |
 | 15 | `fullduplex_sat250` | igual amb trames de 250 B | buffers del convertidor en els dos sentits a la vegada |
 
-Nomes amb `--wires 2` (half-duplex): `collision_blind` i `post_collision` —
-en 4 fils cada sentit te el seu parell i no hi ha bus compartit on colisionar.
+Nomes en **half-duplex** (`--interface rs485-half`): `collision_blind` i
+`post_collision` — en full-duplex cada sentit te el seu cami i no hi ha bus
+compartit on colisionar.
+
+> La guia d'interpretacio de l'informe s'adapta a la interficie triada: parlar
+> de bias de failsafe o de diferencial A-B no te sentit en RS-232 (single-ended)
+> i en RS-422 l'emissor va sempre habilitat. Vegeu `src/rs485_labtest/interfaces.py`.
 
 ## Que significa cada FAIL
 

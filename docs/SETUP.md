@@ -58,11 +58,12 @@ echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB1/latency_timer
   caracteritzar es precisament el failsafe del DUT. Si l'adaptador USB porta
   bias propi commutable, documenteu-ne l'estat a `--notes`.
 
-## Cablejat: 2 fils (half-duplex) vs 4 fils (full-duplex)
+## Interfícies i cablejat
 
-L'eina cobreix les dues topologies amb `--wires 2` (per defecte) o `--wires 4`.
+Tria què proves amb `--interface` (o a la primera pregunta de l'assistent):
+`rs485-half` (per defecte), `rs485-full`, `rs422` o `rs232`.
 
-### 2 fils — un parell compartit
+### RS-485 half-duplex (`rs485-half`) — un parell compartit
 ```
 [A]  A/B  ──────────┬──────────  A/B  [B]
                 (mateix parell; els dos extrems s'alternen)
@@ -71,7 +72,7 @@ Els dos extrems comparteixen el parell i s'han de torn (turnaround). Aquí
 apliquen els tests de **col·lisió** (`collision_blind`, `post_collision`) i el
 turnaround és crític.
 
-### 4 fils — un parell per sentit
+### RS-485 full-duplex (`rs485-full`) i RS-422 (`rs422`) — un parell per sentit
 ```
 [A] TX+/TX- ─────────────────────► RX+/RX- [B]
 [A] RX+/RX- ◄───────────────────── TX+/TX- [B]
@@ -90,11 +91,38 @@ parell, així que:
 ```bash
 rs485-labtest duo \
     --port /dev/serial/by-id/<A> --slave-port /dev/serial/by-id/<B> \
-    --wires 4 --profile standard --label "NDR6_4fils" --live rich
+    --interface rs485-full --profile standard --label "NDR6_4fils" --live rich
 ```
 
 > Comprova el creuament: si connectes TX amb TX no rebràs res i el `sanity`
 > fallarà de cop. Terminació de 120 Ω a l'extrem receptor de **cada** parell.
+
+**RS-422 vs RS-485 de 4 fils**: elèctricament el banc és el mateix; la
+diferència és que en RS-422 l'emissor va **sempre habilitat** (no hi ha
+tri-state ni contesa possible). Per això la guia de l'informe canvia: junk en
+repòs no és bias de failsafe sinó soroll o terminació. Si el teu DUT exigeix
+tri-state de l'emissor, no és RS-422 pur — prova'l com a `rs485-full`.
+
+### RS-232 (`rs232`) — single-ended
+```
+[A] TX ──────────────────────────► RX [B]
+[A] RX ◄────────────────────────── TX [B]
+[A] GND ─────────────────────────  GND [B]
+```
+Creuat (null-modem) i amb **massa comuna**. Diferències importants:
+
+- Senyal **referit a massa**, no diferencial: no hi ha A/B, ni bias de
+  failsafe, ni rebuig de mode comú. Aquests conceptes no apliquen i la guia de
+  l'informe no els menciona.
+- El punt dèbil és la **massa i la longitud**: RS-232 degrada amb la capacitat
+  del cable (límit clàssic ~15 m, molt menys a baud alt). Si veus errors que
+  creixen amb el baud, prova un cable més curt abans d'acusar el DUT.
+- L'eina **no toca el control de flux per maquinari** (RTS/CTS): si el DUT en
+  depèn, cablega'l o desactiva'l.
+
+```bash
+rs485-labtest duo --port ... --slave-port ... --interface rs232
+```
 
 ## Baud rates alts i no estàndard
 

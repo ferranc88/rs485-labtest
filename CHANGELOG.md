@@ -9,8 +9,16 @@ La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
 ## [Unreleased]
 
 ### Added
-- **Mode 4 fils / full-duplex** (`--wires {2,4}`, per defecte 2). En 4 fils
-  cada sentit té el seu parell, així que la bateria s'hi adapta:
+- **Selecció d'interfície** (`--interface {rs485-half,rs485-full,rs422,rs232}`,
+  per defecte `rs485-half`; és també la **primera pregunta de l'assistent**).
+  Determina el pla de tests (via el duplex) i, sobretot, la **guia
+  d'interpretació de l'informe**: en RS-232 (single-ended) no es parla de bias
+  de failsafe ni de diferencial A-B perquè no existeixen, i en RS-422 s'avisa
+  que l'emissor va sempre habilitat. La interfície consta a l'informe per a
+  traçabilitat. `--wires` es manté com a àlies (2 → rs485-half, 4 →
+  rs485-full) i els presets desats amb `wires` es migren sols.
+- **Mode full-duplex**. Amb una interfície full-duplex (485 de 4 fils, RS-422
+  o RS-232) cada sentit té el seu camí, així que la bateria s'hi adapta:
   - treu `collision_blind` i `post_collision` (no hi ha bus compartit on
     col·lisionar en punt a punt);
   - afegeix `fullduplex_load` (64 B) i `fullduplex_sat250` (250 B), que
@@ -25,6 +33,10 @@ La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
   demanar tests d'un cablejat que no toca.
 
 ### Fixed
+- **Informes sempre en UTF-8**: `write_reports` no fixava la codificació, així
+  que els fitxers sortien en la codificació per defecte de cada plataforma
+  (cp1252 a Windows, UTF-8 a Linux) i no eren portables entre el PC del banc i
+  l'escriptori.
 - **Fals timeout amb trames grans a baud baix**: el timeout per intercanvi
   era fix (0,5 s) i una trama de 250 B a 9600 bps triga ~0,54 s d'anada i
   tornada, cosa que donava FER 100% fals a `failsafe_paused@9600`. Ara el
