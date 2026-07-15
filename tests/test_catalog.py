@@ -12,7 +12,14 @@ from rs485_labtest.catalog import (
 
 def test_order_and_catalog_are_consistent():
     assert set(TEST_ORDER) == set(TEST_CATALOG)
-    assert len(TEST_ORDER) == 13
+    assert len(TEST_ORDER) == 15
+
+
+def test_wire_specific_sets_are_known_and_disjoint():
+    from rs485_labtest.catalog import ONLY_2WIRE, ONLY_4WIRE
+    assert ONLY_2WIRE <= set(TEST_ORDER)
+    assert ONLY_4WIRE <= set(TEST_ORDER)
+    assert not (ONLY_2WIRE & ONLY_4WIRE)
 
 
 def test_every_entry_has_the_four_fields():

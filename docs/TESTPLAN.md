@@ -21,6 +21,16 @@ baud) es desplega en 6 subcorrides (±1/2/3%).
 | 12 | `ber_random_long` | trafic aleatori llarg | estimacio/cota de BER amb volum estadistic |
 | 13 | `baud_offset` | el master es desplaça ±1/2/3% del baud nominal (el slave no es toca) | el pressupost de tolerancia de baud del link sencer |
 
+Nomes amb `--wires 4` (full-duplex); en 2 fils no apliquen:
+
+| # | Test | Que fa | Que estressa |
+|---|------|--------|--------------|
+| 14 | `fullduplex_load` | finestra de 8 trames de 64 B en vol, sense esperar l'eco | les dues direccions actives alhora |
+| 15 | `fullduplex_sat250` | igual amb trames de 250 B | buffers del convertidor en els dos sentits a la vegada |
+
+Nomes amb `--wires 2` (half-duplex): `collision_blind` i `post_collision` —
+en 4 fils cada sentit te el seu parell i no hi ha bus compartit on colisionar.
+
 ## Que significa cada FAIL
 
 ### `idle_monitor` FAIL o junk > 0 a qualsevol test
@@ -57,6 +67,14 @@ aquest test.
 ### p99 >> p50 a les latencies
 Turnaround **no determinista**: auto-baud, buffers d'emmagatzematge i
 reenviament o timers interns del convertidor.
+
+### `fullduplex_*` FAIL amb la resta neta (4 fils)
+Les dues direccions per separat van bé, però alhora no. Apunta al **camí de
+tornada compartit**: un convertidor que multiplexa els dos sentits sobre una
+fibra, o que comparteix buffers entre direccions. Si només falla
+`fullduplex_sat250` (250 B) i no `fullduplex_load` (64 B), és **memòria**, no
+ample de banda. Compara el throughput de cada sentit per separat abans
+d'acusar el DUT.
 
 ### Timeouts NOMES a baud baix amb trames grans
 Si veus timeouts concentrats en tests de trama gran (`saturation_250B`,

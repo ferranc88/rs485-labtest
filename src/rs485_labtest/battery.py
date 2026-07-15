@@ -25,12 +25,17 @@ BAUD_OFFSETS_PCT = (1.0, -1.0, 2.0, -2.0, 3.0, -3.0)
 
 
 def battery_plan(profile: str, bauds: list[int], base_baud: int,
-                 tests: list[str] | None = None
+                 tests: list[str] | None = None, wires: int = 2
                  ) -> list[tuple[str, str, dict[str, Any]]]:
     """Retorna llista de (descripcio, tipus, kwargs).
 
     ``tests`` limita el pla a un subconjunt dels tests del nucli (en l'ordre
-    canonic); si es None, es corren tots dotze.
+    canonic); si es None, es corren tots.
+
+    ``wires`` es el cablejat: 2 (half-duplex, un parell compartit) o 4
+    (full-duplex, un parell per sentit). En 4 fils no hi ha bus compartit, aixi
+    que els tests de colisio no apliquen i s'hi afegeixen els de carrega
+    simultania en les dues direccions.
     """
     d = dict(smoke=dict(short=5, med=8, long=10, idle=5),
              standard=dict(short=20, med=45, long=60, idle=30),
@@ -50,6 +55,18 @@ def battery_plan(profile: str, bauds: list[int], base_baud: int,
         ("post_collision",    "ping",    dict()),
         ("ber_random_long",   "traffic", dict(pattern="random",  size=128, gap_ms=0,   duration_s=d["long"])),
     ]
+    if wires == 4:
+        # 4 fils: cada sentit te el seu parell, no hi ha bus compartit ->
+        # les colisions no existeixen en punt a punt i els seus tests no apliquen
+        core = [t for t in core
+                if t[0] not in ("collision_blind", "post_collision")]
+        # ...pero s'hi poden fer proves que en 2 fils serien una colisio:
+        # les dues direccions carregades alhora
+        core += [
+            ("fullduplex_load",   "fullduplex", dict(pattern="random", size=64,  window=8, duration_s=d["med"])),
+            ("fullduplex_sat250", "fullduplex", dict(pattern="random", size=250, window=8, duration_s=d["med"])),
+        ]
+
     if tests is not None:
         want = set(tests)
         core = [t for t in core if t[0] in want]
@@ -181,12 +198,15 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
                 bauds=args.bauds, max_fer=args.max_fer, max_p99_ms=args.max_p99,
                 tests=getattr(args, "tests", None),
                 baud_margin=getattr(args, "baud_margin", 1.0),
+                wires=getattr(args, "wires", 2),
                 platform=platform.platform(), python=sys.version.split()[0],
                 pyserial=pyserial_version, operator_notes=args.notes or "")
 
     plan = battery_plan(args.profile, args.bauds, args.baud,
-                        tests=getattr(args, "tests", None))
-    n_tests = sum(1 for _, k, _ in plan if k in ("traffic", "idle", "ping", "offset"))
+                        tests=getattr(args, "tests", None),
+                        wires=getattr(args, "wires", 2))
+    n_tests = sum(1 for _, k, _ in plan
+                  if k in ("traffic", "idle", "ping", "offset", "fullduplex"))
 
     results = []
     all_lat_rows = []
@@ -214,6 +234,8 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
             monitor.test_start(idx, n_tests, name, kind)
             if kind == "traffic":
                 res = eng.run_traffic_test(name, **kw)
+            elif kind == "fullduplex":
+                res = eng.run_fullduplex_test(name, **kw)
             elif kind == "offset":
                 res = eng.run_baud_offset_test(name, **kw)
                 res["offset_required"] = (
@@ -228,7 +250,7 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
             v, reasons = verdict(res, args.max_fer, args.max_p99)
             res["verdict"], res["reasons"] = v, reasons
             res["lat"] = lat_stats(res["latencies_ms"])
-            if kind == "traffic" and not res.get("collide"):
+            if kind in ("traffic", "fullduplex") and not res.get("collide"):
                 ub, is_bound = ber_bound(res, kw.get("size", 0))
                 if ub:
                     res["ber"] = f"{'<' if is_bound else '>='}{ub:.2e}" + \

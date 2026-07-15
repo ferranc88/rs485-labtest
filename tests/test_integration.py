@@ -65,6 +65,37 @@ class PtyLink:
                 pass
 
 
+def test_duo_smoke_4wire_fullduplex_passes_on_virtual_link(tmp_path):
+    # Els ptys son full-duplex per naturalesa: banc ideal per al mode 4 fils.
+    # Valida que la carrega simultania (finestra de trames en vol) funciona
+    # end-to-end contra el slave real, sense colisions ni perdues.
+    link = PtyLink()
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "rs485_labtest", "duo",
+             "--port", link.port_a, "--slave-port", link.port_b,
+             "--wires", "4", "--profile", "smoke", "--label", "ci_fd",
+             "--seed", "7", "--outdir", str(tmp_path)],
+            capture_output=True, text=True, timeout=300)
+    finally:
+        link.close()
+
+    assert proc.returncode == 0, f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+
+    with open(glob.glob(str(tmp_path / "rs485_ci_fd_*.json"))[0]) as f:
+        doc = json.load(f)
+    assert doc["meta"]["wires"] == 4
+    names = [r["name"] for r in doc["results"]]
+    # en 4 fils: sense tests de colisio, amb els de carrega simultania
+    assert not any(n.startswith("collision_blind") for n in names)
+    assert not any(n.startswith("post_collision") for n in names)
+    fd = [r for r in doc["results"] if r["name"].startswith("fullduplex")]
+    assert len(fd) == 2
+    for r in fd:
+        assert r["verdict"] == "PASS", r
+        assert r["ok"] > 0 and r["junk_bytes"] == 0
+
+
 def test_duo_smoke_battery_passes_on_virtual_link(tmp_path):
     link = PtyLink()
     try:

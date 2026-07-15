@@ -122,6 +122,25 @@ master es desplaça ±1/2/3% (el slave no es toca) i s'apunta on comença el
 FER. ±1% ha de passar (`--baud-margin`); ±2/3% són caracterització — clau
 per a convertidors que re-clocken el senyal, com el NDR6.
 
+### 4 fils (full-duplex)
+
+Amb `--wires 4` la bateria s'adapta al cablejat de 4 fils (un parell per
+sentit, creuat):
+
+```bash
+rs485-labtest duo --port ... --slave-port ... --wires 4
+```
+
+- **Treu** `collision_blind` i `post_collision`: en punt a punt no hi ha bus
+  compartit on col·lisionar.
+- **Afegeix** `fullduplex_load` i `fullduplex_sat250`: carreguen **les dues
+  direccions alhora** (finestra de trames en vol, sense esperar cada eco) —
+  impossible en 2 fils, i on es veu si el convertidor ofega un sentit quan
+  l'altre va carregat.
+- El failsafe (`idle_monitor`, `failsafe_paused`) segueix aplicant a cada parell.
+
+Cablejat i terminació a [docs/SETUP.md](docs/SETUP.md).
+
 ## Flags principals (`battery` / `duo`)
 
 | Flag | Per defecte | Que fa |
@@ -136,6 +155,7 @@ per a convertidors que re-clocken el senyal, com el NDR6.
 | `--max-p99` | `0.0` | llindar p99 de latencia en ms (0 = sense llindar) |
 | `--live` | `auto` | feedback en directe: `auto` / `rich` (TUI) / `plain` |
 | `--tests` | tots | subconjunt de tests del nucli a córrer (noms de la llista) |
+| `--wires` | `2` | cablejat: `2` half-duplex (parell compartit) o `4` full-duplex |
 
 Els criteris per defecte (FER = 0, junk = 0) son intencionals: aixo es una
 eina de **qualificacio**, no de monitoritzacio.

@@ -19,9 +19,12 @@ def write_reports(base: str, meta: dict[str, Any], results: list[dict[str, Any]]
         w.writerows(lat_rows)
 
     lines = [f"# Informe estres RS-485 - {meta['label']}", ""]
+    wires = meta.get("wires", 2)
     lines += [f"- **Data (UTC):** {meta['timestamp_utc']}",
               f"- **Port / baud base:** {meta['port']} @ {meta['base_baud']} "
               f"({meta['parity']},{meta['stopbits']})",
+              f"- **Cablejat:** {wires} fils "
+              f"({'full-duplex' if wires == 4 else 'half-duplex'})",
               f"- **Perfil:** {meta['profile']} | **Seed:** {meta['seed']} "
               f"| **Durada:** {meta['elapsed_s']} s"
               + (" | **INTERROMPUT**" if meta.get("aborted") else ""),

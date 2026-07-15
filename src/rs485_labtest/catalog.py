@@ -26,8 +26,12 @@ TEST_ORDER: list[str] = [
     "sanity", "turnaround_gap0", "min_frames", "pattern_0x55",
     "pattern_0x00_DC", "pattern_0xFF_DC", "saturation_250B", "failsafe_paused",
     "idle_monitor", "collision_blind", "post_collision", "ber_random_long",
-    "baud_offset",
+    "baud_offset", "fullduplex_load", "fullduplex_sat250",
 ]
+
+# Tests que nomes tenen sentit amb un cablejat concret.
+ONLY_2WIRE: frozenset[str] = frozenset({"collision_blind", "post_collision"})
+ONLY_4WIRE: frozenset[str] = frozenset({"fullduplex_load", "fullduplex_sat250"})
 
 TEST_CATALOG: dict[str, TestInfo] = {
     "sanity": {
@@ -112,6 +116,24 @@ TEST_CATALOG: dict[str, TestInfo] = {
         "what": "Trafic pseudoaleatori llarg amb volum estadistic.",
         "why": "Estima/acota la BER. Amb 0 errors es reporta com a cota superior "
                "al 95% CL (< 3/n_bits), mai com a zero.",
+    },
+    "fullduplex_load": {
+        "title": "Carrega simultania (4 fils)",
+        "icon": "🔀",
+        "what": "Envia sense esperar l'eco (finestra de 8 trames): el master "
+                "transmet mentre el slave li retorna trames anteriors.",
+        "why": "Nomes possible en 4 fils (en 2 seria colisio). Posa els dos "
+               "parells actius alhora: aixi es veu si el convertidor ofega una "
+               "direccio quan l'altra va carregada (fibra compartida, buffers).",
+    },
+    "fullduplex_sat250": {
+        "title": "Saturacio bidireccional 250 B (4 fils)",
+        "icon": "🔀",
+        "what": "Igual pero amb trames de 250 B: les dues direccions saturades "
+                "amb trames grans alhora.",
+        "why": "Estressa els buffers del convertidor en els dos sentits a la "
+               "vegada. FAIL aqui amb la resta neta = falta de memoria o "
+               "d'ample de banda del cami de tornada, no integritat de senyal.",
     },
     "baud_offset": {
         "title": "Marge de tolerancia de baud",

@@ -58,6 +58,44 @@ echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB1/latency_timer
   caracteritzar es precisament el failsafe del DUT. Si l'adaptador USB porta
   bias propi commutable, documenteu-ne l'estat a `--notes`.
 
+## Cablejat: 2 fils (half-duplex) vs 4 fils (full-duplex)
+
+L'eina cobreix les dues topologies amb `--wires 2` (per defecte) o `--wires 4`.
+
+### 2 fils — un parell compartit
+```
+[A]  A/B  ──────────┬──────────  A/B  [B]
+                (mateix parell; els dos extrems s'alternen)
+```
+Els dos extrems comparteixen el parell i s'han de torn (turnaround). Aquí
+apliquen els tests de **col·lisió** (`collision_blind`, `post_collision`) i el
+turnaround és crític.
+
+### 4 fils — un parell per sentit
+```
+[A] TX+/TX- ─────────────────────► RX+/RX- [B]
+[A] RX+/RX- ◄───────────────────── TX+/TX- [B]
+```
+El TX de cada extrem va al RX de l'altre (**creuat**). Cada sentit té el seu
+parell, així que:
+
+- **No hi ha col·lisions** en punt a punt → `collision_blind` i
+  `post_collision` no apliquen i l'eina els treu del pla.
+- **Es pot transmetre en les dues direccions alhora** → s'afegeixen
+  `fullduplex_load` i `fullduplex_sat250`, que carreguen els dos parells
+  simultàniament (impossible en 2 fils).
+- El **failsafe segueix aplicant a cada parell**: `idle_monitor` i
+  `failsafe_paused` es mantenen.
+
+```bash
+rs485-labtest duo \
+    --port /dev/serial/by-id/<A> --slave-port /dev/serial/by-id/<B> \
+    --wires 4 --profile standard --label "NDR6_4fils" --live rich
+```
+
+> Comprova el creuament: si connectes TX amb TX no rebràs res i el `sanity`
+> fallarà de cop. Terminació de 120 Ω a l'extrem receptor de **cada** parell.
+
 ## Baud rates alts i no estàndard
 
 L'eina accepta **qualsevol** valor de baud, tant a `--baud` com al barrido

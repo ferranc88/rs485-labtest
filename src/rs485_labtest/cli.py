@@ -11,7 +11,7 @@ import time
 
 from . import __version__
 from .battery import lat_stats, run_battery, verdict
-from .catalog import TEST_ORDER, unknown_tests
+from .catalog import ONLY_2WIRE, ONLY_4WIRE, TEST_ORDER, unknown_tests
 from .engine import TestEngine
 from .slave import run_slave
 from .transport import BaudNotSupported, open_port
@@ -46,6 +46,11 @@ def _common(p: argparse.ArgumentParser) -> None:
 
 def _battery_opts(p: argparse.ArgumentParser) -> None:
     """Opcions comunes de battery i duo."""
+    p.add_argument("--wires", type=int, choices=[2, 4], default=2,
+                   help="cablejat del link: 2 = half-duplex (un parell "
+                        "compartit, per defecte); 4 = full-duplex (un parell "
+                        "per sentit): treu els tests de colisio i afegeix els "
+                        "de carrega simultania")
     p.add_argument("--profile", choices=["smoke", "standard", "soak"], default="standard")
     p.add_argument("--bauds", type=int, nargs="*", default=[],
                    help="bauds addicionals per al barrido (canvi remot al slave); "
@@ -136,11 +141,18 @@ def _run_duo(args: argparse.Namespace) -> None:
 
 def _validate_tests(args: argparse.Namespace) -> None:
     tests = getattr(args, "tests", None)
-    if tests:
-        bad = unknown_tests(tests)
-        if bad:
-            sys.exit(f"[tests] noms desconeguts: {', '.join(bad)}\n"
-                     f"  valids: {', '.join(TEST_ORDER)}")
+    if not tests:
+        return
+    bad = unknown_tests(tests)
+    if bad:
+        sys.exit(f"[tests] noms desconeguts: {', '.join(bad)}\n"
+                 f"  valids: {', '.join(TEST_ORDER)}")
+    wires = getattr(args, "wires", 2)
+    wrong = sorted(set(tests) & (ONLY_4WIRE if wires == 2 else ONLY_2WIRE))
+    if wrong:
+        need = 4 if wires == 2 else 2
+        sys.exit(f"[tests] {', '.join(wrong)} nomes te sentit amb cablejat de "
+                 f"{need} fils; has demanat --wires {wires}")
 
 
 def _dispatch(args: argparse.Namespace) -> None:

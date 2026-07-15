@@ -190,6 +190,86 @@ class TestEngine:
             self._emit(res)
         return res
 
+    def run_fullduplex_test(self, name: str, pattern: str, size: int,
+                            window: int, duration_s: float, timeout: float = 0.5,
+                            warmup: int = 5) -> dict[str, Any]:
+        """Trafic simultani en les dues direccions (nomes cablejat de 4 fils).
+
+        Envia fins a ``window`` trames sense esperar l'eco de cadascuna: mentre
+        el master transmet la trama N+k, el slave ja li esta retornant la N.
+        Aixo deixa **els dos parells actius alhora**, cosa impossible en 2 fils
+        (alla seria una colisio al bus compartit). Els ecos es casen per ``seq``.
+
+        Fa servir el protocol i el slave de sempre: el que canvia es que el
+        master no serialitza els intercanvis.
+        """
+        res: dict[str, Any] = dict(
+            name=name, pattern=pattern, size=size, gap_ms=0,
+            duration_s=duration_s, baud=self.ser.baudrate, collide=False,
+            fullduplex=True, window=window,
+            tx=0, ok=0, crc_err=0, mismatch=0, seq_err=0, timeout=0,
+            junk_bytes=0, latencies_ms=[])
+
+        # una trama pot fer cua darrere de tota la finestra abans no torna
+        frame_s = (HDR_LEN + size + 2) * 10 / self.ser.baudrate
+        deadline_s = min_exchange_timeout(self.ser.baudrate, size, timeout) \
+            + window * frame_s
+
+        reader = FrameReader()
+        self.ser.reset_input_buffer()
+        inflight: dict[int, tuple[bytes, float]] = {}   # seq -> (payload, t_sent)
+        t_end = time.monotonic() + duration_s
+        n = 0
+
+        while time.monotonic() < t_end or inflight:
+            # 1) omplir la finestra sense esperar respostes
+            while len(inflight) < window and time.monotonic() < t_end:
+                payload = make_payload(pattern, size, self.seq, self.rng)
+                try:
+                    self.ser.write(build_frame(T_DATA, self.seq, payload))
+                except WriteTimeout:
+                    res["timeout"] += 1        # buffer de sortida ple
+                    self.ser.reset_output_buffer()
+                    break
+                inflight[self.seq] = (payload, time.perf_counter())
+                self.seq += 1
+
+            # 2) recollir el que hagi tornat mentrestant
+            data = self.ser.read(self.ser.in_waiting or 1)
+            if data:
+                for _rtype, rseq, rpayload in reader.feed(data):
+                    sent = inflight.pop(rseq, None)
+                    if sent is None:
+                        res["seq_err"] += 1    # eco no demanat o duplicat
+                        continue
+                    payload, t0 = sent
+                    rtt = (time.perf_counter() - t0) * 1000.0
+                    n += 1
+                    if n <= warmup:
+                        continue
+                    res["tx"] += 1
+                    if rpayload != payload:
+                        res["mismatch"] += 1
+                    else:
+                        res["ok"] += 1
+                        res["latencies_ms"].append(rtt)
+
+            # 3) caducar les que ja no tornaran
+            now_p = time.perf_counter()
+            for s in [s for s, (_p, t0) in inflight.items()
+                      if now_p - t0 > deadline_s]:
+                inflight.pop(s)
+                n += 1
+                if n > warmup:
+                    res["tx"] += 1
+                    res["timeout"] += 1
+
+            res["junk_bytes"] = reader.junk
+            res["crc_err"] = reader.crc_errors
+            self._emit(res)
+
+        return res
+
     def run_baud_offset_test(self, name: str, offset_pct: float,
                              pattern: str = "random", size: int = 32,
                              gap_ms: float = 0, duration_s: float = 5,

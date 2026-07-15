@@ -110,6 +110,7 @@ def build_namespace(answers: dict[str, Any]) -> tuple[str, argparse.Namespace]:
         parity=answers.get("parity", "N"),
         stopbits=float(answers.get("stopbits", 1)),
         profile=answers.get("profile", "standard"),
+        wires=int(answers.get("wires", 2)),
         bauds=list(answers.get("bauds", []) or []),
         tests=answers.get("tests") or None,
         label=answers.get("label", ""),
@@ -284,6 +285,15 @@ def run_wizard() -> tuple[str, argparse.Namespace]:  # pragma: no cover - intera
         return build_namespace(answers)
 
     _explain(console,
+             "2 fils = half-duplex: un unic parell compartit; els dos extrems "
+             "s'alternen (el cas classic de RS-485).",
+             "4 fils = full-duplex: un parell per sentit; es poden transmetre "
+             "les dues direccions alhora. Treu els tests de colisio (no hi ha "
+             "bus compartit) i afegeix els de carrega simultania.")
+    answers["wires"] = int(Prompt.ask("Cablejat del link", choices=["2", "4"],
+                                      default="2"))
+
+    _explain(console,
              "A cada baud extra es repeteix un subconjunt representatiu de "
              "tests (canvi remot automatic al slave, no cal tocar res).",
              "Buit = nomes el baud base. Exemple: 9600 307200 921600")
@@ -351,6 +361,8 @@ def _print_summary(console: Any, mode: str, ns: argparse.Namespace) -> None:  # 
         lines.append(f"[bold]slave[/] {ns.slave_port}")
     lines.append(f"[bold]baud[/] {ns.baud}"
                  + (f"  +{ns.bauds}" if ns.bauds else ""))
+    lines.append(f"[bold]cablejat[/] {ns.wires} fils "
+                 f"({'full' if ns.wires == 4 else 'half'}-duplex)")
     lines.append(f"[bold]perfil[/] {ns.profile}")
     lines.append("[bold]tests[/] " + ("tots" if ns.tests is None
                                         else ", ".join(ns.tests)))

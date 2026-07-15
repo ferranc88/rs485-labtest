@@ -8,6 +8,22 @@ La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
 
 ## [Unreleased]
 
+### Added
+- **Mode 4 fils / full-duplex** (`--wires {2,4}`, per defecte 2). En 4 fils
+  cada sentit té el seu parell, així que la bateria s'hi adapta:
+  - treu `collision_blind` i `post_collision` (no hi ha bus compartit on
+    col·lisionar en punt a punt);
+  - afegeix `fullduplex_load` (64 B) i `fullduplex_sat250` (250 B), que
+    carreguen **les dues direccions alhora** mitjançant una finestra de
+    trames en vol (el master no espera cada eco) — impossible en 2 fils, on
+    seria una col·lisió. Detecta convertidors que ofeguen un sentit quan
+    l'altre va carregat (fibra multiplexada, buffers compartits);
+  - manté el failsafe (`idle_monitor`, `failsafe_paused`), que aplica a cada
+    parell.
+  Sense canvis al protocol ni al slave: només canvia que el master no
+  serialitza els intercanvis. El cablejat consta a l'informe i la CLI rebutja
+  demanar tests d'un cablejat que no toca.
+
 ### Fixed
 - **Fals timeout amb trames grans a baud baix**: el timeout per intercanvi
   era fix (0,5 s) i una trama de 250 B a 9600 bps triga ~0,54 s d'anada i
