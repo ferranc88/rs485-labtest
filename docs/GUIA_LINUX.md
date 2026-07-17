@@ -77,19 +77,55 @@ ls -l /dev/serial/by-id/
 echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB0/latency_timer
 echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB1/latency_timer
 
-# Notificacions al mòbil (Telegram) per a soak sense vigilància:
-export RS485_TELEGRAM_TOKEN="123456:ABC-..."   # de @BotFather
-rs485-labtest notify-test                       # et diu el chat_id
-export RS485_TELEGRAM_CHAT_ID="987654321"
-rs485-labtest notify-test                       # missatge de prova
-# (posa els dos export al ~/.bashrc perquè persisteixin)
-
 # Permís d'accés als ports (un cop; després tanca i obre sessió):
 sudo usermod -aG dialout $USER
 
 # Passar la bateria de tests (sense hardware, sobre ptys):
 pytest -q
 ```
+
+---
+
+## 5. Notificacions al mòbil (Telegram) — pas a pas
+
+Per rebre un avís a cada FAIL i un resum en acabar (ideal per a soak sense
+vigilància). **Es fa al PC del laboratori**, el que corre els tests.
+
+> El token dona control total del bot: escriu-lo només al teu terminal, mai en
+> un xat ni en un commit.
+
+**1. Crear el bot** (un cop, des del teu Telegram al mòbil):
+- Parla amb **@BotFather** → envia `/newbot` → segueix les instruccions.
+- Et dona un **token** com `123456789:ABCdef...`. Guarda'l.
+- Escriu **qualsevol cosa** al teu bot nou (p. ex. `hola`), perquè et pugui
+  respondre.
+
+**2. Provar-ho al terminal del PC del lab** (dins del repo, amb el venv actiu):
+```bash
+cd ~/rs485-labtest && source .venv/bin/activate
+
+# escrius TU el token, directament al terminal (val només per aquesta sessió):
+export RS485_TELEGRAM_TOKEN="el-teu-token"
+
+rs485-labtest notify-test          # et dirà el teu chat_id (un número)
+
+export RS485_TELEGRAM_CHAT_ID="el-numero-que-t-ha-sortit"
+rs485-labtest notify-test          # ara t'arriba un missatge de prova al mòbil ✓
+```
+
+**3. Fer-ho permanent** (perquè no calgui repetir-ho cada sessió). El PC del
+lab fa servir **zsh**, així que va al `~/.zshrc`:
+```bash
+echo 'export RS485_TELEGRAM_TOKEN="el-teu-token"'     >> ~/.zshrc
+echo 'export RS485_TELEGRAM_CHAT_ID="el-teu-chat-id"' >> ~/.zshrc
+source ~/.zshrc                    # aplica-ho ara (o obre un terminal nou)
+```
+
+**4. A partir d'aquí**, qualsevol `battery` / `duo` notifica sol. Per silenciar
+una corrida puntual: afegeix `--notify off`.
+
+> `export` al terminal = només aquella sessió. Al `~/.zshrc` = a cada terminal
+> nou, per sempre. Amb el token al `~/.zshrc` no l'has de tornar a escriure mai.
 
 ---
 
