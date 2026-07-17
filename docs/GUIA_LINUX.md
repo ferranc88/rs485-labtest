@@ -113,19 +113,39 @@ export RS485_TELEGRAM_CHAT_ID="el-numero-que-t-ha-sortit"
 rs485-labtest notify-test          # ara t'arriba un missatge de prova al mòbil ✓
 ```
 
-**3. Fer-ho permanent** (perquè no calgui repetir-ho cada sessió). El PC del
-lab fa servir **zsh**, així que va al `~/.zshrc`:
+**3. Fer-ho PERMANENT** (escriure-ho un sol cop i no tornar-hi mai més). El PC
+del lab fa servir **zsh**, així que les variables van al `~/.zshrc`, que es
+carrega a cada terminal nou i també després de reiniciar:
+
 ```bash
+# fes-ho UNA sola vegada (canvia els valors pels teus):
 echo 'export RS485_TELEGRAM_TOKEN="el-teu-token"'     >> ~/.zshrc
 echo 'export RS485_TELEGRAM_CHAT_ID="el-teu-chat-id"' >> ~/.zshrc
-source ~/.zshrc                    # aplica-ho ara (o obre un terminal nou)
+
+source ~/.zshrc                    # aplica-ho ara sense obrir terminal nou
 ```
 
-**4. A partir d'aquí**, qualsevol `battery` / `duo` notifica sol. Per silenciar
-una corrida puntual: afegeix `--notify off`.
+- `>>` **afegeix** al fitxer (no l'esborra). No facis servir `>` senzill, que
+  el sobreescriuria.
+- Executa els dos `echo` **una sola vegada**. Si els repeteixes, s'afegeixen
+  línies duplicades; per netejar-les, `nano ~/.zshrc` i esborra les repetides.
 
-> `export` al terminal = només aquella sessió. Al `~/.zshrc` = a cada terminal
-> nou, per sempre. Amb el token al `~/.zshrc` no l'has de tornar a escriure mai.
+**Comprovar que ha quedat gravat** (obre un terminal nou):
+```bash
+echo $RS485_TELEGRAM_TOKEN         # ha de mostrar el token
+echo $RS485_TELEGRAM_CHAT_ID       # ha de mostrar el número
+rs485-labtest notify-test          # missatge de prova al mòbil ✓
+```
+
+**4. A partir d'aquí**, cada terminal nou ja tindrà les variables soles i
+qualsevol `battery` / `duo` notifica sense fer res. Per silenciar una corrida
+puntual: afegeix `--notify off`.
+
+> Regla ràpida: `export` escrit al terminal = només aquella sessió (s'esborra
+> en tancar). Escrit al `~/.zshrc` = per sempre en aquesta màquina i aquest
+> usuari (`clab`). Amb el token al `~/.zshrc` no l'has de tornar a escriure mai.
+> És per usuari: si algun dia corres els tests amb un altre usuari, s'ha de
+> repetir per a aquell.
 
 ---
 
