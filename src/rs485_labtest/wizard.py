@@ -132,6 +132,7 @@ def build_namespace(answers: dict[str, Any]) -> tuple[str, argparse.Namespace]:
         max_fer=float(answers.get("max_fer", 0.0)),
         max_p99=float(answers.get("max_p99", 0.0)),
         baud_margin=float(answers.get("baud_margin", 1.0)),
+        notify=answers.get("notify", "auto"),
         live=answers.get("live", "auto"),
         turnaround_us=int(answers.get("turnaround_us", 0)),
         verbose=False,
@@ -221,6 +222,28 @@ def _ask_interface(console: Any) -> str:  # pragma: no cover - interactiu
         if raw in INTERFACES:
             return raw
         console.print("[red]no existeix[/]")
+
+
+def _ask_notify(console: Any, answers: dict[str, Any]) -> None:  # pragma: no cover
+    import os
+
+    from rich.prompt import Confirm
+
+    from .notify import ENV_CHAT, ENV_TOKEN
+
+    have = bool(os.environ.get(ENV_TOKEN) and os.environ.get(ENV_CHAT))
+    _explain(console,
+             "Avisa per Telegram a cada FAIL i envia un resum en acabar; ideal "
+             "per a corrides llargues (soak).",
+             (f"Configuracio detectada ({ENV_TOKEN} i {ENV_CHAT} definits)."
+              if have else
+              f"Cal exportar {ENV_TOKEN} i {ENV_CHAT}; prova-ho amb "
+              f"'rs485-labtest notify-test'. Sense aixo, no s'enviara res."))
+    if have:
+        answers["notify"] = "auto" if Confirm.ask(
+            "Vols notificacions Telegram?", default=True) else "off"
+    else:
+        answers["notify"] = "auto"        # si mes tard hi son, funcionara sol
 
 
 def _offer_presets(console: Any) -> dict[str, Any] | None:  # pragma: no cover
@@ -375,6 +398,8 @@ def run_wizard() -> tuple[str, argparse.Namespace]:  # pragma: no cover - intera
              "linia classica (millor per a logs). auto = decideix sol.")
     answers["live"] = Prompt.ask(
         "Vista en directe", choices=list(_LIVE), default="rich")
+
+    _ask_notify(console, answers)
 
     mode, ns = build_namespace(answers)
     _print_summary(console, mode, ns)

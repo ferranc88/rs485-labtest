@@ -16,7 +16,8 @@ from . import __version__
 from .catalog import HALF_DUPLEX_ONLY
 from .engine import TestEngine
 from .interfaces import DEFAULT_INTERFACE, interface_duplex
-from .monitor import Monitor, make_monitor
+from .monitor import Monitor, MultiMonitor, TelegramMonitor, make_monitor
+from .notify import build_notifier
 from .protocol import HDR_LEN
 from .report import write_reports
 from .transport import Transport, open_port
@@ -175,6 +176,9 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
     if monitor is None:
         monitor = make_monitor(getattr(args, "live", "auto"),
                                bool(getattr(args, "quiet", False)), __version__)
+        notifier = build_notifier(args)
+        if notifier is not None:
+            monitor = MultiMonitor([monitor, TelegramMonitor(notifier)])
 
     outdir = args.outdir
     os.makedirs(outdir, exist_ok=True)

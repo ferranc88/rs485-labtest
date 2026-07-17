@@ -9,6 +9,15 @@ La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
 ## [Unreleased]
 
 ### Added
+- **Notificacions per Telegram** (`--notify {auto,telegram,off}`, per defecte
+  auto): alerta a cada FAIL i resum en acabar (o si s'interromp), enviat al
+  mòbil. Pensat per a soak sense vigilància. Només stdlib (`urllib`), i
+  resilient: si no hi ha xarxa, no envia i **mai atura ni bloqueja la
+  bateria**. Config per `RS485_TELEGRAM_TOKEN` / `RS485_TELEGRAM_CHAT_ID` (el
+  token no va mai per flag). Nou subcomandament `notify-test` que valida la
+  config i, si falta el chat_id, el descobreix via getUpdates. Capa
+  `MultiMonitor` que reparteix a la UI i a Telegram alhora; l'assistent ho
+  pregunta.
 - **Selecció d'interfície** (`--interface {rs485-half,rs485-full,rs422,rs232}`,
   per defecte `rs485-half`; és també la **primera pregunta de l'assistent**).
   Determina el pla de tests (via el duplex) i, sobretot, la **guia

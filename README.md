@@ -179,6 +179,30 @@ Els valors no estàndard es generen amb divisor fraccionari — RS-485 tolera
 (`BaudNotSupported`) i, dins d'un barrido, salta aquell baud i continua.
 Detalls i sostres per xip a [docs/SETUP.md](docs/SETUP.md#baud-rates-alts-i-no-estàndard).
 
+## Notificacions per Telegram
+
+Per a corrides llargues (soak) en què no estàs mirant el terminal, l'eina pot
+avisar-te **al mòbil**: una alerta a cada FAIL i un resum en acabar (o si
+s'interromp). Fa servir la Bot API de Telegram; és resilient (si no hi ha
+xarxa, no envia i **no atura mai el test**).
+
+Posada en marxa (un cop):
+
+1. A Telegram, parla amb **@BotFather** → `/newbot` → et dona un **token**.
+2. Escriu qualsevol cosa al teu bot nou (perquè et pugui respondre).
+3. Exporta les credencials i prova-ho:
+   ```bash
+   export RS485_TELEGRAM_TOKEN="123456:ABC-..."
+   rs485-labtest notify-test          # et dirà el teu chat_id
+   export RS485_TELEGRAM_CHAT_ID="987654321"
+   rs485-labtest notify-test          # ara t'envia un missatge de prova
+   ```
+
+A partir d'aquí, qualsevol `battery`/`duo` notifica automàticament (o
+`--notify off` per silenciar-ho puntualment). Posa els dos `export` al teu
+`~/.bashrc` perquè persisteixin. El token **no** es passa mai per flag (queda a
+l'historial del shell) — sempre per variable d'entorn.
+
 ## Llegir l'informe
 
 Cada corrida genera tres fitxers amb timestamp UTC i el `--label`:

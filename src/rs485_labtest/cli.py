@@ -81,6 +81,10 @@ def _battery_opts(p: argparse.ArgumentParser) -> None:
     p.add_argument("--live", choices=["auto", "rich", "plain"], default="auto",
                    help="feedback en directe: auto (TUI si hi ha terminal), "
                         "rich (forca la TUI), plain (linia a linia)")
+    p.add_argument("--notify", choices=["auto", "telegram", "off"], default="auto",
+                   help="notificacions Telegram (alerta a cada FAIL i resum "
+                        "final): auto = actiu si hi ha RS485_TELEGRAM_TOKEN i "
+                        "RS485_TELEGRAM_CHAT_ID; off = mai")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -100,6 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="retard artificial abans de l'eco")
 
     sub.add_parser("wizard", help="assistent interactiu: et pregunta i llança")
+    sub.add_parser("notify-test", help="prova la config de notificacions Telegram")
 
     pb = sub.add_parser("battery", help="bateria automatitzada (master)")
     _common(pb)
@@ -197,6 +202,34 @@ def _dispatch(args: argparse.Namespace) -> None:
         ser.close()
 
 
+def _notify_test() -> None:
+    """Envia un missatge de prova; si falta el chat_id, ajuda a trobar-lo."""
+    import os
+
+    from .notify import ENV_CHAT, ENV_TOKEN, TelegramNotifier, discover_chat_ids
+
+    token = os.environ.get(ENV_TOKEN)
+    chat = os.environ.get(ENV_CHAT)
+    if not token:
+        sys.exit(f"falta {ENV_TOKEN} (te'l dona @BotFather a Telegram)")
+    if not chat:
+        print(f"falta {ENV_CHAT}. Buscant chats que hagin escrit al bot…")
+        ids = discover_chat_ids(token)
+        if ids:
+            for cid, name in ids:
+                print(f"  chat_id={cid}  ({name})")
+            print(f"Exporta {ENV_CHAT} amb un d'aquests i torna a provar.")
+        else:
+            print("Cap. Escriu /start al bot des del teu Telegram i reintenta.")
+        sys.exit(1)
+    ok = TelegramNotifier(token, chat).send(
+        "🔔 rs485-labtest: prova de notificació correcta.")
+    if ok:
+        print("Enviat ✓ (mira el teu Telegram).")
+    else:
+        sys.exit("No s'ha pogut enviar; revisa el token, el chat_id i la xarxa.")
+
+
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
 
@@ -206,6 +239,10 @@ def main(argv: list[str] | None = None) -> None:
     elif getattr(args, "quiet", False):
         level = logging.WARNING
     logging.basicConfig(level=level, format="%(message)s")
+
+    if args.mode == "notify-test":
+        _notify_test()
+        return
 
     if args.mode == "wizard":
         from .wizard import run_wizard

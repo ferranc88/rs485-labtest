@@ -374,6 +374,84 @@ class RichMonitor:
                 + "░" * (width - full) + "[/]")
 
 
+# --------------------------------------------------------------- composicio
+class MultiMonitor:
+    """Reparteix cada esdeveniment a diversos monitors (UI + notificacions)."""
+
+    def __init__(self, monitors: list[Monitor]) -> None:
+        self._ms = monitors
+        self.wants_progress = any(m.wants_progress for m in monitors)
+
+    def battery_start(self, meta: dict[str, Any], n_tests: int, base: str) -> None:
+        for m in self._ms:
+            m.battery_start(meta, n_tests, base)
+
+    def baud_change(self, baud: int, ok: bool) -> None:
+        for m in self._ms:
+            m.baud_change(baud, ok)
+
+    def test_start(self, idx: int, n_tests: int, name: str, kind: str) -> None:
+        for m in self._ms:
+            m.test_start(idx, n_tests, name, kind)
+
+    def test_progress(self, res: dict[str, Any]) -> None:
+        for m in self._ms:
+            m.test_progress(res)
+
+    def test_end(self, res: dict[str, Any]) -> None:
+        for m in self._ms:
+            m.test_end(res)
+
+    def note(self, msg: str) -> None:
+        for m in self._ms:
+            m.note(msg)
+
+    def battery_end(self, results: list[dict[str, Any]], n_fail: int,
+                    elapsed_s: float, base: str) -> None:
+        for m in self._ms:
+            m.battery_end(results, n_fail, elapsed_s, base)
+
+
+class TelegramMonitor:
+    """Monitor que notifica per Telegram: alerta a cada FAIL i resum en acabar.
+
+    No consumeix progres en directe (seria spam) i no toca la UI: nomes envia
+    missatges puntuals a traves d'un ``TelegramNotifier`` (que mai llença).
+    """
+
+    wants_progress = False
+
+    def __init__(self, notifier: Any, announce_start: bool = True) -> None:
+        self.notifier = notifier
+        self.announce_start = announce_start
+        self.meta: dict[str, Any] = {}
+
+    def battery_start(self, meta: dict[str, Any], n_tests: int, base: str) -> None:
+        self.meta = meta            # referencia viva: recollira aborted/elapsed
+        if self.announce_start:
+            from .notify import format_start
+            self.notifier.send(format_start(meta, n_tests))
+
+    def baud_change(self, baud: int, ok: bool) -> None: ...
+
+    def test_start(self, idx: int, n_tests: int, name: str, kind: str) -> None: ...
+
+    def test_progress(self, res: dict[str, Any]) -> None: ...
+
+    def test_end(self, res: dict[str, Any]) -> None:
+        if res.get("verdict") == "FAIL":
+            from .notify import format_fail
+            self.notifier.send(format_fail(res, self.meta))
+
+    def note(self, msg: str) -> None: ...
+
+    def battery_end(self, results: list[dict[str, Any]], n_fail: int,
+                    elapsed_s: float, base: str) -> None:
+        from .notify import format_summary
+        self.notifier.send(format_summary(self.meta, results, n_fail,
+                                          elapsed_s, base))
+
+
 # ------------------------------------------------------------------- seleccio
 def rich_available() -> bool:
     try:
