@@ -100,3 +100,93 @@ curl -s "https://api.telegram.org/bot$RS485_TELEGRAM_TOKEN/getMe"   # ok:true
 
 > Regla: fins que `getMe` no digui `ok:true` **en aquesta sessió**, res
 > funcionarà — el 401 és Telegram dient "aquest token no el reconec".
+
+---
+
+## 3. Les variables s'obliden en tancar el terminal
+
+`export` escrit al terminal dura **només aquella sessió**. Perquè persisteixin
+han d'estar al fitxer d'arrencada del shell (el PC del lab fa servir **zsh**):
+
+```bash
+echo 'export RS485_TELEGRAM_TOKEN="EL-TOKEN-BO"'  >> ~/.zshrc
+echo 'export RS485_TELEGRAM_CHAT_ID="EL-CHAT-ID"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Prova de veritat: **tanca i obre un terminal nou** i comprova que hi són:
+```bash
+echo "[$RS485_TELEGRAM_TOKEN]"    # ha de sortir ple
+```
+
+> `~` es fa amb `AltGr+4` i espai; o escriu `$HOME/.zshrc` en lloc de `~/.zshrc`.
+
+---
+
+## 4. Al `~/.zshrc` hi són però no es carreguen
+
+Quasi sempre és **usuari equivocat** (cada usuari té el seu `~/.zshrc`; no és el
+mateix `clab` que `root`) o que el terminal no llegeix el `.zshrc`.
+
+```bash
+whoami                    # amb quin usuari estàs
+grep RS485 ~/.zshrc       # hi són, per a AQUEST usuari?
+```
+
+- **`grep` buit** → les vas posar amb un altre usuari: torna-les a posar sent
+  l'usuari amb qui corres els tests (i llança sempre amb aquell usuari).
+- **`grep` les mostra però no carreguen** → posa-les al `~/.zshenv`, que zsh
+  llegeix **sempre** (el `.zshrc` depèn de si el shell és interactiu/login):
+  ```bash
+  echo 'export RS485_TELEGRAM_TOKEN="EL-TOKEN-BO"'  >> ~/.zshenv
+  echo 'export RS485_TELEGRAM_CHAT_ID="EL-CHAT-ID"' >> ~/.zshenv
+  ```
+
+---
+
+## 5. Moltes línies duplicades al `~/.zshrc`
+
+Passa si s'ha repetit l'`echo … >> ~/.zshrc` diverses vegades. Mana **l'última**
+del fitxer, així que si la darrera és dolenta, trenca la resta. Deixa'n només
+una de bona:
+
+```bash
+cp ~/.zshrc ~/.zshrc.bak            # còpia de seguretat
+sed -i '/RS485_TELEGRAM/d' ~/.zshrc # esborra TOTES les línies RS485
+grep RS485 ~/.zshrc                 # no ha de tornar res
+
+# torna a afegir-ne UNA de sola (el token que dona getMe ok:true):
+echo 'export RS485_TELEGRAM_TOKEN="EL-TOKEN-BO"'  >> ~/.zshrc
+echo 'export RS485_TELEGRAM_CHAT_ID="EL-CHAT-ID"' >> ~/.zshrc
+source ~/.zshrc
+
+grep RS485 ~/.zshrc                 # ara han de sortir NOMÉS 2 línies
+curl -s "https://api.telegram.org/bot$RS485_TELEGRAM_TOKEN/getMe"   # ok:true
+```
+
+---
+
+## 6. Notificar diverses persones
+
+Dues maneres (cap requereix tocar codi):
+
+**a) chat_id per coma** (per a 1-2 persones fixes). Cadascú ha d'obrir el bot i
+prémer **Start** abans:
+```bash
+export RS485_TELEGRAM_CHAT_ID="el-teu-id,l-id-de-l-altra"
+rs485-labtest notify-test          # prova cada destinatari i diu quin falla
+```
+
+**b) un grup** (recomanat per a equip; afegeixes gent al grup i prou):
+1. Crea un grup a Telegram i afegeix-hi el bot.
+2. Escriu al grup `/start@elteubot` perquè el bot el "vegi".
+3. Agafa l'id del grup (és **negatiu**):
+   ```bash
+   curl -s "https://api.telegram.org/bot$RS485_TELEGRAM_TOKEN/getUpdates"
+   # busca  "chat":{"id":-1001234567890,...}
+   ```
+4. Posa'l com a destinatari:
+   ```bash
+   export RS485_TELEGRAM_CHAT_ID="-1001234567890"
+   rs485-labtest notify-test
+   ```
