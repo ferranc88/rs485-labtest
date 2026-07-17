@@ -106,40 +106,47 @@ curl -s "https://api.telegram.org/bot$RS485_TELEGRAM_TOKEN/getMe"   # ok:true
 ## 3. Les variables s'obliden en tancar el terminal
 
 `export` escrit al terminal dura **només aquella sessió**. Perquè persisteixin
-han d'estar al fitxer d'arrencada del shell (el PC del lab fa servir **zsh**):
-
+han d'estar al fitxer d'arrencada del shell — i cal posar-les al del shell que
+fas servir de veritat. **Comprova primer quin shell obre el terminal:**
 ```bash
-echo 'export RS485_TELEGRAM_TOKEN="EL-TOKEN-BO"'  >> ~/.zshrc
-echo 'export RS485_TELEGRAM_CHAT_ID="EL-CHAT-ID"' >> ~/.zshrc
-source ~/.zshrc
+echo "$0"        # -bash o /bin/bash -> BASH ;  -zsh o /bin/zsh -> ZSH
 ```
+
+- **BASH** (el cas del PC del lab, usuari `root`) → `~/.bashrc`:
+  ```bash
+  echo 'export RS485_TELEGRAM_TOKEN="EL-TOKEN-BO"'  >> ~/.bashrc
+  echo 'export RS485_TELEGRAM_CHAT_ID="EL-CHAT-ID"' >> ~/.bashrc
+  source ~/.bashrc
+  ```
+- **ZSH** → el mateix però a `~/.zshrc`.
+
+> ⚠️ Bash **no** llegeix mai els fitxers de zsh (`.zshrc`, `.zshenv`) ni al
+> revés. Posar-ho al fitxer del shell que no toca és la causa #1 de "no
+> persisteix".
 
 Prova de veritat: **tanca i obre un terminal nou** i comprova que hi són:
 ```bash
 echo "[$RS485_TELEGRAM_TOKEN]"    # ha de sortir ple
 ```
 
-> `~` es fa amb `AltGr+4` i espai; o escriu `$HOME/.zshrc` en lloc de `~/.zshrc`.
+> `~` es fa amb `AltGr+4` i espai; o escriu `$HOME/.bashrc` en lloc de `~/.bashrc`.
 
 ---
 
-## 4. Al `~/.zshrc` hi són però no es carreguen
+## 4. Hi són al fitxer però no es carreguen
 
-Quasi sempre és **usuari equivocat** (cada usuari té el seu `~/.zshrc`; no és el
-mateix `clab` que `root`) o que el terminal no llegeix el `.zshrc`.
-
+Diagnòstic d'una sola línia al terminal nou:
 ```bash
-whoami                    # amb quin usuari estàs
-grep RS485 ~/.zshrc       # hi són, per a AQUEST usuari?
+whoami; echo "$0 $SHELL"; echo "[$RS485_TELEGRAM_TOKEN]"; grep -l RS485 ~/.bashrc ~/.zshrc ~/.zshenv ~/.profile 2>/dev/null
 ```
 
-- **`grep` buit** → les vas posar amb un altre usuari: torna-les a posar sent
-  l'usuari amb qui corres els tests (i llança sempre amb aquell usuari).
-- **`grep` les mostra però no carreguen** → posa-les al `~/.zshenv`, que zsh
-  llegeix **sempre** (el `.zshrc` depèn de si el shell és interactiu/login):
+- **shell = bash però les línies són a `.zshrc`/`.zshenv`** → fitxer equivocat:
+  passa-les a `~/.bashrc` (secció 3).
+- **`whoami` no és l'usuari amb qui corres els tests** → cada usuari té els seus
+  fitxers; posa-les per a l'usuari bo i llança sempre amb aquell.
+- **shell login que no llegeix `~/.bashrc`** → afegeix-ho també a `~/.profile`:
   ```bash
-  echo 'export RS485_TELEGRAM_TOKEN="EL-TOKEN-BO"'  >> ~/.zshenv
-  echo 'export RS485_TELEGRAM_CHAT_ID="EL-CHAT-ID"' >> ~/.zshenv
+  grep RS485 ~/.bashrc >> ~/.profile
   ```
 
 ---

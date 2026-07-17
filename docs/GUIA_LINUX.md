@@ -113,27 +113,31 @@ export RS485_TELEGRAM_CHAT_ID="el-numero-que-t-ha-sortit"
 rs485-labtest notify-test          # ara t'arriba un missatge de prova al mòbil ✓
 ```
 
-**3. Fer-ho PERMANENT** (escriure-ho un sol cop i no tornar-hi mai més). El PC
-del lab fa servir **zsh**, així que les variables van al `~/.zshrc`, que es
-carrega a cada terminal nou i també després de reiniciar:
+**3. Fer-ho PERMANENT** (escriure-ho un sol cop i no tornar-hi mai més). Van al
+fitxer d'arrencada del shell que fas servir. **Mira primer quin és:**
+```bash
+echo "$0"        # -bash / /bin/bash -> BASH (fitxer ~/.bashrc)
+                 # -zsh  / /bin/zsh  -> ZSH  (fitxer ~/.zshrc)
+```
+El PC del lab (usuari `root`) obre **bash**, així que és `~/.bashrc`:
 
 ```bash
 # fes-ho UNA sola vegada (canvia els valors pels teus):
-echo 'export RS485_TELEGRAM_TOKEN="el-teu-token"'     >> ~/.zshrc
-echo 'export RS485_TELEGRAM_CHAT_ID="el-teu-chat-id"' >> ~/.zshrc
+echo 'export RS485_TELEGRAM_TOKEN="el-teu-token"'     >> ~/.bashrc
+echo 'export RS485_TELEGRAM_CHAT_ID="el-teu-chat-id"' >> ~/.bashrc
 
-source ~/.zshrc                    # aplica-ho ara sense obrir terminal nou
+source ~/.bashrc                   # aplica-ho ara sense obrir terminal nou
 ```
 
-- `>>` **afegeix** al fitxer (no l'esborra). No facis servir `>` senzill, que
-  el sobreescriuria.
-- Executa els dos `echo` **una sola vegada**. Si els repeteixes, s'afegeixen
-  línies duplicades; per netejar-les, `nano ~/.zshrc` i esborra les repetides.
+- ⚠️ **Bash no llegeix els fitxers de zsh** (`.zshrc`, `.zshenv`) ni al revés.
+  Posar-ho al que no toca = "no persisteix". Si dubtes, mira `echo "$0"`.
+- `>>` **afegeix** al fitxer (no l'esborra). No facis servir `>` senzill.
+- Executa els `echo` **una sola vegada**. Per netejar duplicats:
+  `sed -i '/RS485_TELEGRAM/d' ~/.bashrc` i torna-hi.
 
-**Comprovar que ha quedat gravat** (obre un terminal nou):
+**Comprovar que ha quedat gravat** (tanca i obre un terminal NOU):
 ```bash
-echo $RS485_TELEGRAM_TOKEN         # ha de mostrar el token
-echo $RS485_TELEGRAM_CHAT_ID       # ha de mostrar el número
+echo "[$RS485_TELEGRAM_TOKEN]"     # ha de sortir ple
 rs485-labtest notify-test          # missatge de prova al mòbil ✓
 ```
 
