@@ -65,3 +65,38 @@ curl -s "https://api.telegram.org/bot$RS485_TELEGRAM_TOKEN/getUpdates"
 ```bash
 rs485-labtest notify-test
 ```
+
+---
+
+## 2. Telegram dona `HTTP 401 Unauthorized`
+
+401 vol dir **exactament una cosa**: el token carregat a la variable d'entorn
+**no és vàlid** (mal copiat, tallat, amb un espai, o revocat). No és xarxa ni
+chat_id. Sovint passa perquè s'ha arreglat el `~/.zshrc` però el terminal
+obert encara té el valor vell, o al `~/.zshrc` hi ha una errada.
+
+Fer-ho tot **al mateix terminal**:
+
+**1) Agafa el token bo** de @BotFather (`/mybots` → bot → API Token) i posa'l a
+la sessió, i valida'l a l'acte:
+```bash
+export RS485_TELEGRAM_TOKEN='ENGANXA_EL_TOKEN_AQUI'
+curl -s "https://api.telegram.org/bot$RS485_TELEGRAM_TOKEN/getMe"
+```
+Ha de sortir `{"ok":true,...}`. Si encara és 401 → el token està mal copiat o
+el bot no existeix.
+
+**2) Quan `getMe` doni `ok:true`**, prova la notificació immediatament:
+```bash
+rs485-labtest notify-test
+```
+
+**3) Fes-ho permanent** (corregeix el token dolent del `~/.zshrc`):
+```bash
+nano ~/.zshrc          # edita la línia export RS485_TELEGRAM_TOKEN='...'
+source ~/.zshrc
+curl -s "https://api.telegram.org/bot$RS485_TELEGRAM_TOKEN/getMe"   # ok:true
+```
+
+> Regla: fins que `getMe` no digui `ok:true` **en aquesta sessió**, res
+> funcionarà — el 401 és Telegram dient "aquest token no el reconec".
