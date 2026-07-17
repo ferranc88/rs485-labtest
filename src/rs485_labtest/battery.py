@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import __version__
-from .catalog import HALF_DUPLEX_ONLY
+from .catalog import HALF_DUPLEX_ONLY, STRESS_TESTS
 from .engine import TestEngine
 from .interfaces import DEFAULT_INTERFACE, interface_duplex
 from .monitor import Monitor, MultiMonitor, TelegramMonitor, make_monitor
@@ -28,7 +28,8 @@ BAUD_OFFSETS_PCT = (1.0, -1.0, 2.0, -2.0, 3.0, -3.0)
 
 
 def battery_plan(profile: str, bauds: list[int], base_baud: int,
-                 tests: list[str] | None = None, duplex: str = "half"
+                 tests: list[str] | None = None, duplex: str = "half",
+                 stress_first: bool = False
                  ) -> list[tuple[str, str, dict[str, Any]]]:
     """Retorna llista de (descripcio, tipus, kwargs).
 
@@ -40,10 +41,15 @@ def battery_plan(profile: str, bauds: list[int], base_baud: int,
     - ``half`` (RS-485 2 fils): bus compartit -> tests de colisio i turnaround.
     - ``full`` (RS-485 4 fils, RS-422, RS-232): un cami per sentit -> no hi ha
       contesa, i s'hi poden fer els tests de carrega simultania.
+
+    ``stress_first`` posa els tests de carrega sostinguda (:data:`STRESS_TESTS`,
+    inclosos els full-duplex) just despres del ``sanity``, per comencar el
+    burn-in per la part mes dura. El perfil ``endurance`` dura ~24 h.
     """
     d = dict(smoke=dict(short=5, med=8, long=10, idle=5),
              standard=dict(short=20, med=45, long=60, idle=30),
-             soak=dict(short=60, med=300, long=1800, idle=120))[profile]
+             soak=dict(short=60, med=300, long=1800, idle=120),
+             endurance=dict(short=120, med=4200, long=27000, idle=3600))[profile]
 
     core: list[tuple[str, str, dict[str, Any]]] = [
         ("sanity",            "traffic", dict(pattern="counter", size=8,   gap_ms=20,  duration_s=d["short"])),
@@ -73,6 +79,13 @@ def battery_plan(profile: str, bauds: list[int], base_baud: int,
     if tests is not None:
         want = set(tests)
         core = [t for t in core if t[0] in want]
+
+    if stress_first:
+        # sanity primer (valida el banc), despres la carrega dura, despres la resta
+        head = [t for t in core if t[0] == "sanity"]
+        stress = [t for t in core if t[0] in STRESS_TESTS]
+        rest = [t for t in core if t[0] != "sanity" and t[0] not in STRESS_TESTS]
+        core = head + stress + rest
 
     plan = [(f"{name}@{base_baud}", kind, kw) for name, kind, kw in core]
 
@@ -208,11 +221,13 @@ def run_battery(args: argparse.Namespace, transport: Transport | None = None,
                 tests=getattr(args, "tests", None),
                 baud_margin=getattr(args, "baud_margin", 1.0),
                 interface=iface, duplex=duplex,
+                stress_first=bool(getattr(args, "stress_first", False)),
                 platform=platform.platform(), python=sys.version.split()[0],
                 pyserial=pyserial_version, operator_notes=args.notes or "")
 
     plan = battery_plan(args.profile, args.bauds, args.baud,
-                        tests=getattr(args, "tests", None), duplex=duplex)
+                        tests=getattr(args, "tests", None), duplex=duplex,
+                        stress_first=bool(getattr(args, "stress_first", False)))
     n_tests = sum(1 for _, k, _ in plan
                   if k in ("traffic", "idle", "ping", "offset", "fullduplex"))
 

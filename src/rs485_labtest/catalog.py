@@ -34,6 +34,12 @@ TEST_ORDER: list[str] = [
 HALF_DUPLEX_ONLY: frozenset[str] = frozenset({"collision_blind", "post_collision"})
 FULL_DUPLEX_ONLY: frozenset[str] = frozenset({"fullduplex_load", "fullduplex_sat250"})
 
+# Tests de carrega sostinguda: son els que estressen de veritat l'equip en un
+# burn-in. Amb --stress-first es posen al davant (despres del sanity).
+STRESS_TESTS: frozenset[str] = frozenset({
+    "fullduplex_load", "fullduplex_sat250", "saturation_250B", "ber_random_long",
+})
+
 TEST_CATALOG: dict[str, TestInfo] = {
     "sanity": {
         "title": "Sanejament del link",

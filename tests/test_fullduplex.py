@@ -4,6 +4,7 @@ import pytest
 
 from fakes import BitFlipDUT, FakeTransport, PerfectDUT
 from rs485_labtest.battery import battery_plan, verdict
+from rs485_labtest.catalog import STRESS_TESTS
 from rs485_labtest.cli import main
 from rs485_labtest.engine import TestEngine
 
@@ -38,6 +39,49 @@ def test_plan_full_duplex_keeps_failsafe_and_idle_tests():
 def test_plan_full_duplex_selection_of_fullduplex_only():
     plan = battery_plan("smoke", [], 115200, tests=["fullduplex_load"], duplex="full")
     assert [n for n, _, _ in plan] == ["fullduplex_load@115200"]
+
+
+# ------------------------------------------------ endurance + stress_first
+def _plan_seconds(plan):
+    return sum(kw.get("duration_s", 0) for _, _, kw in plan)
+
+
+def test_endurance_profile_is_about_24h():
+    total = _plan_seconds(battery_plan("endurance", [], 115200, duplex="full"))
+    assert 20 * 3600 <= total <= 28 * 3600      # ~24 h de burn-in
+
+
+def test_endurance_is_much_longer_than_soak():
+    soak = _plan_seconds(battery_plan("soak", [], 115200, duplex="full"))
+    endur = _plan_seconds(battery_plan("endurance", [], 115200, duplex="full"))
+    assert endur > soak * 5
+
+
+def test_stress_first_puts_load_tests_after_sanity():
+    plan = battery_plan("smoke", [], 115200, duplex="full", stress_first=True)
+    names = [n.split("@")[0] for n, k, _ in plan if k in
+             ("traffic", "idle", "ping", "fullduplex")]
+    assert names[0] == "sanity"                 # el sanity segueix primer
+    # els tests de carrega venen just despres, abans dels de patro/idle
+    assert names[1] in STRESS_TESTS
+    fd_pos = names.index("fullduplex_load")
+    idle_pos = names.index("idle_monitor")
+    assert fd_pos < idle_pos                     # la carrega, abans que la resta
+
+
+def test_stress_first_off_keeps_canonical_order():
+    plan = battery_plan("smoke", [], 115200, duplex="full", stress_first=False)
+    names = [n.split("@")[0] for n, _, _ in plan]
+    assert names[0] == "sanity"
+    assert names.index("fullduplex_load") > names.index("idle_monitor")
+
+
+def test_stress_first_half_duplex_fronts_saturation_and_ber():
+    plan = battery_plan("standard", [], 115200, duplex="half", stress_first=True)
+    names = [n.split("@")[0] for n, k, _ in plan if k in
+             ("traffic", "idle", "ping")]
+    assert names[0] == "sanity"
+    assert {"saturation_250B", "ber_random_long"} & set(names[1:3])
 
 
 # ------------------------------------------------- carrega simultania (motor)

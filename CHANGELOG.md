@@ -9,6 +9,12 @@ La numeracio arrenca a 0.3.0: les "versions" 1.x/2.x eren l'script monolitic
 ## [Unreleased]
 
 ### Added
+- **Perfil `endurance` (~24 h) i `--stress-first`** per a burn-in intensiu.
+  L'`endurance` dedica el gruix del temps als tests de càrrega sostinguda
+  (BER i `failsafe_paused` ~7,5 h cadascun). `--stress-first` reordena la
+  bateria perquè comenci pels tests de càrrega (full-duplex, saturació, BER)
+  just després del `sanity` (que sempre va primer per validar el banc).
+  L'assistent l'ofereix i el proposa per defecte en endurance o full-duplex.
 - **Notificacions per Telegram** (`--notify {auto,telegram,off}`, per defecte
   auto): alerta a cada FAIL i resum en acabar (o si s'interromp), enviat al
   mòbil. Pensat per a soak sense vigilància. Només stdlib (`urllib`), i

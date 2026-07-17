@@ -59,7 +59,13 @@ def _battery_opts(p: argparse.ArgumentParser) -> None:
     p.add_argument("--wires", type=int, choices=[2, 4], default=None,
                    help="alias antic de --interface (2 = rs485-half, "
                         "4 = rs485-full)")
-    p.add_argument("--profile", choices=["smoke", "standard", "soak"], default="standard")
+    p.add_argument("--profile", choices=["smoke", "standard", "soak", "endurance"],
+                   default="standard",
+                   help="durada: smoke ~2min · standard ~15min · soak ~2h · "
+                        "endurance ~24h (burn-in)")
+    p.add_argument("--stress-first", action="store_true",
+                   help="comenca la bateria pels tests de carrega sostinguda "
+                        "(full-duplex, saturacio, BER) just despres del sanity")
     p.add_argument("--bauds", type=int, nargs="*", default=[],
                    help="bauds addicionals per al barrido (canvi remot al slave); "
                         "s'accepten valors alts/no estandard, p.ex. "

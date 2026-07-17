@@ -44,7 +44,9 @@ repo: https://github.com/ferranc88/rs485-labtest
   `collision_blind`+`post_collision` (half-duplex), `ber_random_long`,
   `baud_offset` (marge de tolerància de baud ±1/2/3%),
   `fullduplex_load`+`fullduplex_sat250` (full-duplex: càrrega simultània).
-- **Perfils**: `smoke` (~2 min) · `standard` (~15 min) · `soak` (~2 h).
+- **Perfils**: `smoke` (~2 min) · `standard` (~15 min) · `soak` (~2 h) ·
+  `endurance` (~24 h, burn-in). Amb `--stress-first` la bateria comença pels
+  tests de càrrega sostinguda (full-duplex, saturació, BER) després del sanity.
 - **Barrido de bauds** (`--bauds`) amb canvi remot al slave; bauds alts i no
   estàndard (p.ex. 307200) suportats.
 - **TUI en directe** (`rich`): progrés, test en curs amb descripció, FER,

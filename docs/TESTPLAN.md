@@ -2,7 +2,8 @@
 
 Cada corrida executa aquests tests al baud base (i un subconjunt
 representatiu a cada baud extra de `--bauds`). Els parametres de durada
-depenen del perfil (`smoke` / `standard` / `soak`). El test 13 (marge de
+depenen del perfil (`smoke` / `standard` / `soak` / `endurance` ~24 h). El
+test 13 (marge de
 baud) es desplega en 6 subcorrides (±1/2/3%).
 
 | # | Test | Que fa | Que estressa |

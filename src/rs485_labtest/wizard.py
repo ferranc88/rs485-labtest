@@ -19,11 +19,16 @@ from pathlib import Path
 from typing import Any
 
 from .catalog import TEST_ORDER, describe
-from .interfaces import DEFAULT_INTERFACE, INTERFACES, interface_for_wires
+from .interfaces import (
+    DEFAULT_INTERFACE,
+    INTERFACES,
+    interface_duplex,
+    interface_for_wires,
+)
 
 _MODES = ("duo", "battery", "slave")
 _LIVE = ("auto", "rich", "plain")
-_PROFILES = ("smoke", "standard", "soak")
+_PROFILES = ("smoke", "standard", "soak", "endurance")
 
 # on es desen les configuracions de l'assistent (JSON: nom -> respostes)
 PRESETS_PATH = Path.home() / ".config" / "rs485-labtest" / "presets.json"
@@ -121,6 +126,7 @@ def build_namespace(answers: dict[str, Any]) -> tuple[str, argparse.Namespace]:
         parity=answers.get("parity", "N"),
         stopbits=float(answers.get("stopbits", 1)),
         profile=answers.get("profile", "standard"),
+        stress_first=bool(answers.get("stress_first", False)),
         interface=resolve_interface(answers),
         wires=None,                    # ja resolt a interface; l'alias no aplica
         bauds=list(answers.get("bauds", []) or []),
@@ -360,11 +366,20 @@ def run_wizard() -> tuple[str, argparse.Namespace]:  # pragma: no cover - intera
         answers["bauds"] = []
 
     _explain(console,
-             "smoke ~2 min: validar el muntatge. standard ~15 min: la corrida "
-             "de qualificacio habitual. soak ~2 h: volum estadistic per a la "
-             "BER i deriva termica.")
+             "smoke ~2 min: validar el muntatge. standard ~15 min: qualificacio "
+             "habitual. soak ~2 h: BER i deriva termica. endurance ~24 h: "
+             "burn-in intensiu (estres sostingut tot un dia).")
     answers["profile"] = Prompt.ask(
         "Perfil", choices=list(_PROFILES), default="standard")
+
+    _explain(console,
+             "Comenca la bateria pels tests de carrega sostinguda (full-duplex, "
+             "saturacio, BER) just despres del sanity, en lloc de deixar-los al "
+             "final. Recomanat per a burn-in / endurance.")
+    fd = interface_duplex(resolve_interface(answers)) == "full"
+    answers["stress_first"] = Confirm.ask(
+        "Comencar pels tests de carrega?",
+        default=(answers["profile"] == "endurance" or fd))
 
     _explain(console,
              "Tots = la bateria completa (recomanat per qualificar).",
@@ -420,7 +435,9 @@ def _print_summary(console: Any, mode: str, ns: argparse.Namespace) -> None:  # 
     info = INTERFACES.get(ns.interface)
     lines.insert(0, f"[bold]interfície[/] {info['icon'] if info else ''} "
                     f"{info['title'] if info else ns.interface}")
-    lines.append(f"[bold]perfil[/] {ns.profile}")
+    lines.append(f"[bold]perfil[/] {ns.profile}"
+                 + ("  ⚠️ ~24 h" if ns.profile == "endurance" else "")
+                 + ("  · carrega primer" if getattr(ns, "stress_first", False) else ""))
     lines.append("[bold]tests[/] " + ("tots" if ns.tests is None
                                         else ", ".join(ns.tests)))
     lines.append(f"[bold]label[/] {ns.label or '—'}   "

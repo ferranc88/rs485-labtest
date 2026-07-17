@@ -150,11 +150,30 @@ rs485-labtest duo --port ... --slave-port ... --interface rs422
 
 Cablejat i terminació de cada cas a [docs/SETUP.md](docs/SETUP.md).
 
+## Burn-in de 24 h (endurance)
+
+Per a un estres sostingut d'un dia sencer, el perfil `endurance` (~24 h) dedica
+la major part del temps als tests de càrrega (BER i `failsafe_paused` ~7,5 h
+cadascun, saturació i full-duplex ~1 h). Amb `--stress-first`, la bateria
+**comença per la càrrega dura** just després del `sanity`:
+
+```bash
+rs485-labtest duo --port ... --slave-port ... \
+    --interface rs485-full --profile endurance --stress-first \
+    --label "NDR6_burnin24h" --live rich
+```
+
+Recomanat activar les [notificacions Telegram](#feedback-en-directe-tui): a un
+run de 24 h no estaràs mirant el terminal, i reps l'alerta a cada FAIL i el
+resum al final. `sanity` va sempre primer per no malgastar 24 h en un muntatge
+mal cablejat.
+
 ## Flags principals (`battery` / `duo`)
 
 | Flag | Per defecte | Que fa |
 |---|---|---|
-| `--profile` | `standard` | `smoke` (~2 min) · `standard` (~15 min) · `soak` (~2 h) |
+| `--profile` | `standard` | `smoke` (~2 min) · `standard` (~15 min) · `soak` (~2 h) · `endurance` (~24 h) |
+| `--stress-first` | off | comença pels tests de càrrega sostinguda (full-duplex, saturació, BER) |
 | `--bauds` | — | bauds addicionals per al barrido (canvi remot al slave) |
 | `--label` | `unlabeled` | identificador del DUT/condicio (Vcm, temperatura...) |
 | `--notes` | — | notes de l'operador per a l'informe |
