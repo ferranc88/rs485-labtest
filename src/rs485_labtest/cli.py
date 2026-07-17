@@ -20,7 +20,7 @@ from .interfaces import (
     interface_for_wires,
 )
 from .slave import run_slave
-from .transport import BaudNotSupported, open_port
+from .transport import BaudNotSupported, PortUnavailable, open_port
 
 log = logging.getLogger(__name__)
 
@@ -218,16 +218,25 @@ def _notify_test() -> None:
         if ids:
             for cid, name in ids:
                 print(f"  chat_id={cid}  ({name})")
-            print(f"Exporta {ENV_CHAT} amb un d'aquests i torna a provar.")
+            print(f"Exporta {ENV_CHAT} amb un o diversos d'aquests "
+                  f"(separats per coma) i torna a provar.")
         else:
             print("Cap. Escriu /start al bot des del teu Telegram i reintenta.")
         sys.exit(1)
-    ok = TelegramNotifier(token, chat).send(
-        "🔔 rs485-labtest: prova de notificació correcta.")
-    if ok:
-        print("Enviat ✓ (mira el teu Telegram).")
+
+    notifier = TelegramNotifier(token, chat)
+    print(f"Provant {len(notifier.chat_ids)} destinatari(s)…")
+    all_ok = True
+    for cid in notifier.chat_ids:
+        ok = notifier._send_one(
+            cid, "🔔 rs485-labtest: prova de notificació correcta.")
+        print(f"  chat_id={cid}: {'enviat ✓' if ok else 'FALLIT ✗'}")
+        all_ok = all_ok and ok
+    if all_ok:
+        print("Tot correcte (mira els Telegram).")
     else:
-        sys.exit("No s'ha pogut enviar; revisa el token, el chat_id i la xarxa.")
+        sys.exit("Algun destinatari ha fallat. Comprova que cadascu hagi "
+                 "premut Start al bot i que el seu chat_id sigui correcte.")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -252,6 +261,8 @@ def main(argv: list[str] | None = None) -> None:
         _dispatch(args)
     except BaudNotSupported as exc:
         sys.exit(f"[baud] {exc}")
+    except PortUnavailable as exc:
+        sys.exit(f"[port] {exc}")
 
 
 if __name__ == "__main__":  # pragma: no cover

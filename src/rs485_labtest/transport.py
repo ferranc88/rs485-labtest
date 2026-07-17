@@ -33,6 +33,24 @@ class BaudNotSupported(Exception):
     """
 
 
+class PortUnavailable(Exception):
+    """El port no existeix o no s'hi pot accedir (nom erroni o permisos)."""
+
+
+def available_ports() -> list[str]:
+    """Ports serie detectats al sistema, per ajudar quan el nom es erroni."""
+    found: list[str] = []
+    try:
+        from serial.tools import list_ports
+        found = [p.device for p in list_ports.comports()]
+    except Exception:  # pragma: no cover - list_ports pot no estar
+        pass
+    if not found:
+        import glob
+        found = sorted(glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*"))
+    return found
+
+
 @runtime_checkable
 class Transport(Protocol):
     """Interficie minima que necessita el motor de tests."""
@@ -115,8 +133,9 @@ def open_port(port: str, baud: int, parity: str = "N",
         ser = serial.Serial(port=port, baudrate=baud, bytesize=8, parity=p,
                             stopbits=s, timeout=0.01, write_timeout=2)
     except (ValueError, OSError) as exc:
-        # separem "no puc obrir el port" de "no puc amb aquest baud"
-        if isinstance(exc, ValueError) or "baud" in str(exc).lower():
+        low = str(exc).lower()
+        # 1) no puc amb aquest baud
+        if isinstance(exc, ValueError) or "baud" in low:
             raise BaudNotSupported(
                 f"no s'ha pogut obrir {port} a {baud} bps: {exc}\n"
                 f"  - cada xip te el seu maxim: FTDI FT232R fins ~3M, "
@@ -125,7 +144,17 @@ def open_port(port: str, baud: int, parity: str = "N",
                 f"divisor fraccionari; RS-485 tolera <~2-3% de desajust.\n"
                 f"  - a Linux baixa el latency_timer a 1 (vegeu docs/SETUP.md)."
             ) from exc
-        raise
+        # 2) el port no existeix o no s'hi pot accedir
+        ports = available_ports()
+        llista = ("  ports detectats ara: " + ", ".join(ports)) if ports else \
+            "  no s'ha detectat cap port serie (cap adaptador connectat?)"
+        pista = ("permisos: afegeix-te al grup dialout (vegeu docs/SETUP.md)"
+                 if "permission" in low else
+                 "revisa el nom (sovint es /dev/ttyACM0, no /dev/ttyUSB0) "
+                 "o fes servir /dev/serial/by-id/")
+        raise PortUnavailable(
+            f"no s'ha pogut obrir el port {port}: {exc}\n{llista}\n  {pista}"
+        ) from exc
     time.sleep(0.15)
     ser.reset_input_buffer()
     ser.reset_output_buffer()

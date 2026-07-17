@@ -11,7 +11,12 @@ d'ordres, que queda a l'historial del shell):
     export RS485_TELEGRAM_TOKEN="123456:ABC-..."
     export RS485_TELEGRAM_CHAT_ID="987654321"
 
-El token el dona @BotFather; el chat_id es descobreix amb ``notify-test``.
+Per notificar diverses persones, posa'n els chat_id separats per coma:
+
+    export RS485_TELEGRAM_CHAT_ID="987654321,123456789"
+
+Cadascu ha d'haver iniciat el bot (Start) abans de poder rebre res. El token
+el dona @BotFather; els chat_id es descobreixen amb ``notify-test``.
 """
 
 from __future__ import annotations
@@ -30,6 +35,19 @@ log = logging.getLogger(__name__)
 ENV_TOKEN = "RS485_TELEGRAM_TOKEN"
 ENV_CHAT = "RS485_TELEGRAM_CHAT_ID"
 _API = "https://api.telegram.org/bot{token}/{method}"
+
+
+def parse_chat_ids(raw: str) -> list[str]:
+    """'123, 456 789' -> ['123','456','789'] (dedupe, ordre conservat).
+
+    Permet notificar diverses persones: separa per coma o espais. Cadascu ha
+    d'haver iniciat el bot (Start) abans de poder rebre res.
+    """
+    out: list[str] = []
+    for tok in raw.replace(",", " ").split():
+        if tok not in out:
+            out.append(tok)
+    return out
 
 
 # ------------------------------------------------------------------ format
@@ -100,40 +118,52 @@ def format_summary(meta: dict[str, Any], results: list[dict[str, Any]],
 
 # ------------------------------------------------------------------ transport
 class TelegramNotifier:
-    """Enviament de missatges a un chat de Telegram. Mai llença cap excepcio."""
+    """Enviament de missatges a un o mes chats de Telegram. Mai llença.
 
-    def __init__(self, token: str, chat_id: str, timeout: float = 10.0) -> None:
+    ``chat_ids`` pot ser una cadena (un o diversos ids separats per coma/espai)
+    o una llista. Cada destinatari ha d'haver iniciat el bot (Start) abans.
+    """
+
+    def __init__(self, token: str, chat_ids: str | list[str],
+                 timeout: float = 10.0) -> None:
         self.token = token
-        self.chat_id = chat_id
+        self.chat_ids = (parse_chat_ids(chat_ids) if isinstance(chat_ids, str)
+                         else list(chat_ids))
         self.timeout = timeout
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> TelegramNotifier | None:
         e = env if env is not None else os.environ
         token, chat = e.get(ENV_TOKEN), e.get(ENV_CHAT)
-        if token and chat:
+        if token and chat and parse_chat_ids(chat):
             return cls(token, chat)
         return None
 
-    def send(self, text: str) -> bool:
-        """Envia un missatge de text pla. Retorna True si Telegram l'accepta.
-
-        Sense ``parse_mode``: els noms de test porten ``_`` i ``@``, que en
-        Markdown de Telegram es menjarien o donarien error.
-        """
+    def _send_one(self, chat_id: str, text: str) -> bool:
         url = _API.format(token=self.token, method="sendMessage")
-        data = urlparse.urlencode({"chat_id": self.chat_id, "text": text}).encode()
+        data = urlparse.urlencode({"chat_id": chat_id, "text": text}).encode()
         try:
             req = urlrequest.Request(url, data=data)
             with urlrequest.urlopen(req, timeout=self.timeout) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
             if not body.get("ok"):
-                log.warning("[telegram] rebutjat: %s", body.get("description"))
+                log.warning("[telegram] chat %s rebutjat: %s",
+                            chat_id, body.get("description"))
                 return False
             return True
         except Exception as exc:                  # xarxa, timeout, JSON, el que sigui
-            log.warning("[telegram] no s'ha pogut enviar: %s", exc)
+            log.warning("[telegram] chat %s: no s'ha pogut enviar: %s", chat_id, exc)
             return False
+
+    def send(self, text: str) -> bool:
+        """Envia a tots els destinataris. True si TOTS l'accepten.
+
+        Sense ``parse_mode``: els noms de test porten ``_`` i ``@``, que en
+        Markdown de Telegram es menjarien o donarien error. Un destinatari que
+        falla no impedeix la resta (cadascu es independent).
+        """
+        results = [self._send_one(cid, text) for cid in self.chat_ids]
+        return bool(results) and all(results)
 
 
 def discover_chat_ids(token: str, timeout: float = 10.0) -> list[tuple[str, str]]:

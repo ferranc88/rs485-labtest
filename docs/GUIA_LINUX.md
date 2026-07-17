@@ -141,6 +141,15 @@ rs485-labtest notify-test          # missatge de prova al mòbil ✓
 qualsevol `battery` / `duo` notifica sense fer res. Per silenciar una corrida
 puntual: afegeix `--notify off`.
 
+**Notificar més d'una persona:** posa els seus `chat_id` separats per coma al
+`RS485_TELEGRAM_CHAT_ID`. **Cadascú ha d'obrir el bot i prémer Start abans**
+(Telegram no deixa que el bot escrigui a qui no l'ha iniciat). El seu chat_id
+surt del `notify-test` (o del `getUpdates` un cop t'ha escrit).
+```bash
+export RS485_TELEGRAM_CHAT_ID="el-teu-id,l-id-de-l-altra-persona"
+rs485-labtest notify-test          # prova cada destinatari i diu quin falla
+```
+
 > Regla ràpida: `export` escrit al terminal = només aquella sessió (s'esborra
 > en tancar). Escrit al `~/.zshrc` = per sempre en aquesta màquina i aquest
 > usuari (`clab`). Amb el token al `~/.zshrc` no l'has de tornar a escriure mai.

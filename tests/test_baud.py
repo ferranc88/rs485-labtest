@@ -93,11 +93,28 @@ def test_open_port_translates_baud_valueerror(monkeypatch):
     assert "5000000" in str(ei.value)
 
 
-def test_open_port_non_baud_oserror_propagates(monkeypatch):
-    monkeypatch.setattr(transport, "serial",
-                        _fake_serial_module(OSError("No such file or directory")))
-    with pytest.raises(OSError):
-        open_port("/dev/ttyUSB9", 115200)
+def test_open_port_missing_device_gives_clean_error(monkeypatch):
+    from rs485_labtest.transport import PortUnavailable
+    monkeypatch.setattr(transport, "serial", _fake_serial_module(
+        FileNotFoundError(2, "No such file or directory")))
+    monkeypatch.setattr(transport, "available_ports",
+                        lambda: ["/dev/ttyACM0", "/dev/ttyACM1"])
+    with pytest.raises(PortUnavailable) as ei:
+        open_port("/dev/ttyUSB0", 115200)
+    msg = str(ei.value)
+    assert "/dev/ttyUSB0" in msg                 # el port que ha fallat
+    assert "/dev/ttyACM0" in msg                 # i els que si que hi son
+    assert "ttyACM0" in msg and "no such file" in msg.lower()
+
+
+def test_open_port_permission_denied_hints_dialout(monkeypatch):
+    from rs485_labtest.transport import PortUnavailable
+    monkeypatch.setattr(transport, "serial", _fake_serial_module(
+        PermissionError(13, "Permission denied")))
+    monkeypatch.setattr(transport, "available_ports", lambda: [])
+    with pytest.raises(PortUnavailable) as ei:
+        open_port("/dev/ttyACM0", 115200)
+    assert "dialout" in str(ei.value)
 
 
 def test_serial_transport_baud_setter_translates_error():

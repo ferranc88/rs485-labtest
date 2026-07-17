@@ -90,7 +90,11 @@ def test_from_env_needs_both_vars():
     assert TelegramNotifier.from_env({ENV_TOKEN: "t"}) is None
     assert TelegramNotifier.from_env({ENV_CHAT: "c"}) is None
     n = TelegramNotifier.from_env({ENV_TOKEN: "t", ENV_CHAT: "c"})
-    assert n is not None and n.token == "t" and n.chat_id == "c"
+    assert n is not None and n.token == "t" and n.chat_ids == ["c"]
+
+
+def test_from_env_blank_chat_is_none():
+    assert TelegramNotifier.from_env({ENV_TOKEN: "t", ENV_CHAT: "   "}) is None
 
 
 def test_build_notifier_off_and_auto(monkeypatch):
@@ -137,6 +141,52 @@ def test_send_never_raises_on_network_error(monkeypatch):
                         _fake_urlopen({}, boom=OSError("xarxa caiguda")))
     # el punt clau: una corrida de 3h no pot petar perque no hi ha xarxa
     assert TelegramNotifier("t", "c").send("x") is False
+
+
+# ------------------------------------------------- diversos destinataris
+def test_parse_chat_ids_separators_and_dedupe():
+    from rs485_labtest.notify import parse_chat_ids
+    assert parse_chat_ids("123, 456 789 123") == ["123", "456", "789"]
+    assert parse_chat_ids("  ") == []
+
+
+def test_from_env_parses_multiple_chat_ids():
+    n = TelegramNotifier.from_env({ENV_TOKEN: "t", ENV_CHAT: "111,222"})
+    assert n is not None and n.chat_ids == ["111", "222"]
+
+
+def test_send_delivers_to_every_recipient(monkeypatch):
+    sent: list = []
+
+    def _open(req, timeout=None):
+        sent.append(getattr(req, "data", b""))
+        return io.BytesIO(json.dumps({"ok": True}).encode())
+
+    monkeypatch.setattr(notify.urlrequest, "urlopen", _open)
+    assert TelegramNotifier("t", "111,222,333").send("hola") is True
+    assert len(sent) == 3
+    joined = b"".join(sent)
+    assert b"chat_id=111" in joined
+    assert b"chat_id=222" in joined
+    assert b"chat_id=333" in joined
+
+
+def test_send_one_bad_recipient_does_not_block_others(monkeypatch):
+    # 222 es rebutjat (p.ex. no ha premut Start); 111 i 333 han de rebre igual
+    reached: list = []
+
+    def _open(req, timeout=None):
+        data = getattr(req, "data", b"")
+        reached.append(data)
+        ok = b"chat_id=222" not in data
+        return io.BytesIO(json.dumps(
+            {"ok": ok, "description": None if ok else "chat not found"}).encode())
+
+    monkeypatch.setattr(notify.urlrequest, "urlopen", _open)
+    n = TelegramNotifier("t", "111,222,333")
+    assert n.send("x") is False              # no tots han anat be
+    assert len(reached) == 3                  # pero s'ha intentat a tots tres
+    assert n._send_one("111", "x") is True    # els bons segueixen funcionant
 
 
 # ------------------------------------------------------ monitor integracio
